@@ -30,10 +30,25 @@ from conftest import _date_spans
 
 
 def _natural_date(text):
+    """Parse ProjectPHI's supported English full-date output shape.
+
+    Example:
+        `"March 14, 2026"` is parsed as `date(2026, 3, 14)`.
+    """
     return datetime.strptime(text, "%B %d, %Y").date()
 
 
 def _month_year_date(text):
+    """Parse ProjectPHI's supported English month/year output shape.
+
+    Example:
+        `"March 2021"` is parsed as `date(2021, 3, 1)`.
+
+    Note:
+        `datetime.strptime(..., "%B %Y")` fills in day `1` by default. This is
+        only for test comparison/ordering; ProjectPHI's actual month/year shift
+        policy uses its own internal anchor day.
+    """
     return datetime.strptime(text, "%B %Y").date()
 
 
