@@ -174,6 +174,95 @@ The CLI prints only summary counts and sanitized warnings. It does not accept
 direct secret values on the command line; pass environment-variable names for
 stable replacement modes.
 
+### Bulk CSV Example With Stable Dates And Patient Names
+
+This synthetic bulk example uses five CSV rows. Two rows belong to the same
+patient, which shows that stable date shifting preserves the interval between
+their dates and that explicit patient aliases map to the same fake identity.
+
+```text
+synthetic_aliases.csv:
+patient_id,alias
+Patient/bulk-001,Zylanda Qorven
+Patient/bulk-001,Zylanda
+Patient/bulk-002,Maribel Voss
+Patient/bulk-002,Maribel
+Patient/bulk-002,Voss
+Patient/bulk-003,Lumina Frost
+Patient/bulk-003,Lumina
+Patient/bulk-003,Frost
+Patient/bulk-004,Orion Vale
+Patient/bulk-004,Orion
+Patient/bulk-004,Vale
+
+synthetic_input.csv:
+patient_id,note_id,note_text
+Patient/bulk-001,Note/bulk-001-a,"Patient Zylanda Qorven seen on March 14, 2026. Call 416-555-0101."
+Patient/bulk-001,Note/bulk-001-b,"Zylanda returned on March 21, 2026. Continue letrozole."
+Patient/bulk-002,Note/bulk-002-a,"Patient Maribel Voss had CT on April 1, 2026. MRN SYN-2222."
+Patient/bulk-003,Note/bulk-003-a,"Dr. Theo Calder reviewed mammography with tomosynthesis on May 5, 2026."
+Patient/bulk-004,Note/bulk-004-a,Follow-up booked for June 2026 after remission visit.
+```
+
+Output:
+
+```text
+summary:
+{'rows_read': 5, 'rows_written': 5, 'rows_failed': 0, 'spans_written': 13, 'warnings': []}
+
+synthetic_output.csv:
+patient_id,note_id,note_text
+Patient/bulk-001,Note/bulk-001-a,"Patient Spencer Thompson seen on March 27, 2026. Call 416-572-1264."
+Patient/bulk-001,Note/bulk-001-b,"Spencer returned on April 3, 2026. Continue letrozole."
+Patient/bulk-002,Note/bulk-002-a,"Patient Barry Walker had CT on February 17, 2026. MRN SYN-2222."
+Patient/bulk-003,Note/bulk-003-a,"Dr. Steven Stout reviewed mammography with tomosynthesis on May 10, 2026."
+Patient/bulk-004,Note/bulk-004-a,Follow-up booked for May 2026 after remission visit.
+```
+
+In the first two rows, the same patient gets the same fake given name
+(`Spencer`) and the two dates are shifted by the same patient-specific offset
+from seven days apart to seven days apart. The clinical phrase `mammography
+with tomosynthesis` is preserved by the protected clinical term policy.
+
+The value `SYN-2222` remains in the first run because pyDeid did not detect
+that synthetic format as an identifier and no custom regex was configured for
+it. If a similar pattern represented a governed local/site-specific identifier,
+that is the kind of concrete gap to address with a pyDeid custom regex:
+
+```json
+{
+  "synthetic_local_code": {
+    "phi_type": "Synthetic Local Code",
+    "pattern": "\\bSYN-\\d{4}\\b",
+    "replacement": "<SYNTHETIC_LOCAL_CODE>"
+  }
+}
+```
+
+With that custom regex passed to the same bulk run, the relevant output row
+becomes:
+
+```text
+summary:
+{'rows_read': 5, 'rows_written': 5, 'rows_failed': 0, 'spans_written': 14, 'warnings': []}
+
+synthetic_output.csv row:
+Patient/bulk-002,Note/bulk-002-a,"Patient Barry Walker had CT on February 17, 2026. MRN <SYNTHETIC_LOCAL_CODE>."
+
+custom regex audit metadata:
+custom_regex_rule_id=synthetic_local_code
+custom_regex_phi_type=Synthetic Local Code
+```
+
+The configured `phi_type` is intentionally neutral. pyDeid uses `phi_type`
+when choosing replacement behavior, so names containing built-in pyDeid type
+words such as `MRN`, `Name`, `Date`, `Time`, or `Hospital` can trigger pyDeid's
+built-in surrogate generators before the custom replacement is used. Use a
+neutral PHI type when the intended final text is the configured constant
+replacement. ProjectPHI records the custom rule ID and PHI type in audit
+metadata without including the raw regex pattern.
+
+
 ## Stable Replacement Examples
 
 Stable date shifting:
