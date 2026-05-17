@@ -1,0 +1,22 @@
+.venv/
+.idea/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+.env
+.env.*
+*.log
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+*.whl
+
+# Local wheelhouse artifacts
+wheelhouse/
+
+# Local vendored/reference material
+vendor/
+references/*.pdf
