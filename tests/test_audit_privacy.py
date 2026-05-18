@@ -1,24 +1,7 @@
-"""Audit and warning privacy tests using synthetic inputs only.
+"""Audit and warning privacy tests.
 
-These tests focus on the privacy boundary for audit CSVs, returned summaries,
-and warning rows.
-
-Main contracts covered:
-- audit rows include safe metadata and replacement/provenance fields;
-- audit rows do not include raw note text or raw detected PHI;
-- ambiguous legacy audit fields such as `replacement`, `surrogate_start`, and
-  `surrogate_end` are not emitted;
-- failed CSV rows are omitted from de-identified output;
-- row failures and warnings include sanitized context only;
-- arbitrary exception text is not copied into warnings or audit rows;
-- stable date-shift and stable patient-name audit metadata is emitted without
-  raw source values;
-- missing required stable-policy inputs fail safely;
-- title-context, custom-regex, protected-term, date, and name audit fields are
-  blank on warning-only rows.
-
-All notes, names, identifiers, aliases, and regex-like values in this file are
-synthetic.
+These tests focus on making sure raw synthetic note text, raw detected PHI,
+raw aliases, and raw regex-like values do not leak into audit/warning outputs.
 """
 
 from project_phi import DeidentificationResult, deidentify_csv
@@ -26,11 +9,7 @@ import project_phi.csv_adapter as csv_adapter
 from conftest import _read_csv, _write_csv
 
 
-# Baseline audit privacy behavior.
-
-
 def test_deidentify_csv_writes_audit_without_raw_note_text(tmp_path):
-    """Audit rows omit raw note text and raw detected identifiers."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -62,9 +41,7 @@ def test_deidentify_csv_writes_audit_without_raw_note_text(tmp_path):
     assert all("surrogate_end" not in row for row in audit_rows)
     assert summary["spans_written"] == len(audit_rows)
 
-
 def test_deidentify_csv_row_failure_is_sanitized_and_omitted(tmp_path, monkeypatch):
-    """Failed rows are omitted and fake exception text is not copied to audit/warnings."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -86,7 +63,6 @@ def test_deidentify_csv_row_failure_is_sanitized_and_omitted(tmp_path, monkeypat
     _write_csv(input_file, rows)
 
     def fake_deidentify_note(note_text, **kwargs):
-        """Fake one row failure with intentionally unsafe exception text."""
         if note_text == failed_note:
             # The fake exception includes raw note text to prove the CSV adapter
             # copies only sanitized exception class metadata.
@@ -126,13 +102,11 @@ def test_deidentify_csv_row_failure_is_sanitized_and_omitted(tmp_path, monkeypat
     assert audit_rows[0]["project_title_context_policy"] == ""
     assert audit_rows[0]["project_title_context_trigger"] == ""
     assert audit_rows[0]["project_title_context_word"] == ""
-
-
-# Stable date-shift audit privacy behavior.
-
+    assert audit_rows[0]["project_ordinary_token_policy"] == ""
+    assert audit_rows[0]["project_ordinary_token"] == ""
+    assert audit_rows[0]["project_ordinary_token_category"] == ""
 
 def test_deidentify_csv_stable_date_shift_audit_metadata_without_raw_phi(tmp_path):
-    """Date-shift audit rows include metadata but omit raw dates and identifiers."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -172,9 +146,7 @@ def test_deidentify_csv_stable_date_shift_audit_metadata_without_raw_phi(tmp_pat
     assert raw_date not in audit_text
     assert raw_identifier not in audit_text
 
-
 def test_deidentify_csv_stable_date_shift_missing_patient_id_row_fails_safely(tmp_path):
-    """Date shifting fails rows without patient IDs without leaking raw date text."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -215,9 +187,7 @@ def test_deidentify_csv_stable_date_shift_missing_patient_id_row_fails_safely(tm
     assert "2001-12-10" not in warning_text
     assert "ValueError" in warning_text
 
-
 def test_deidentify_csv_stable_date_shift_types_excluding_dates_fail_safely(tmp_path):
-    """Date shifting fails safely when requested pyDeid types exclude dates."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -255,9 +225,7 @@ def test_deidentify_csv_stable_date_shift_types_excluding_dates_fail_safely(tmp_
     assert "011-0111" not in warning_text
     assert "ValueError" in warning_text
 
-
 def test_deidentify_csv_stable_date_shift_missing_secret_fails_safely(tmp_path):
-    """Date shifting fails safely when no secret is configured."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -293,12 +261,7 @@ def test_deidentify_csv_stable_date_shift_missing_secret_fails_safely(tmp_path):
     assert "011-0111" not in warning_text
     assert "ValueError" in warning_text
 
-
-# Stable patient-name audit privacy behavior.
-
-
 def test_deidentify_csv_stable_patient_name_audit_metadata_without_raw_phi(tmp_path):
-    """Stable patient-name audit rows include metadata but omit raw alias values."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -345,9 +308,7 @@ def test_deidentify_csv_stable_patient_name_audit_metadata_without_raw_phi(tmp_p
     assert raw_family not in audit_text
     assert rows[0]["note_text"] not in audit_text
 
-
 def test_deidentify_csv_stable_patient_names_missing_aliases_fail_safely(tmp_path):
-    """Missing row aliases fail safely without leaking raw name values."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -390,9 +351,7 @@ def test_deidentify_csv_stable_patient_names_missing_aliases_fail_safely(tmp_pat
     assert "Qorven" not in warning_text
     assert "ValueError" in warning_text
 
-
 def test_deidentify_csv_stable_patient_names_missing_patient_id_fails_safely(tmp_path):
-    """Missing patient IDs fail stable-name rows without leaking names or identifiers."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -437,9 +396,7 @@ def test_deidentify_csv_stable_patient_names_missing_patient_id_fails_safely(tmp
     assert "011-0111" not in warning_text
     assert "ValueError" in warning_text
 
-
 def test_deidentify_csv_stable_patient_names_missing_alias_map_fails_safely(tmp_path):
-    """Missing alias maps fail stable-name rows without leaking the note."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -461,9 +418,7 @@ def test_deidentify_csv_stable_patient_names_missing_alias_map_fails_safely(tmp_
     assert note not in audit_file.read_text(encoding="utf-8")
     assert "ValueError" in " ".join(summary["warnings"])
 
-
 def test_deidentify_csv_stable_patient_names_ambiguous_aliases_fail_safely(tmp_path):
-    """Ambiguous alias configs fail safely without leaking aliases or note values."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -505,9 +460,7 @@ def test_deidentify_csv_stable_patient_names_ambiguous_aliases_fail_safely(tmp_p
     assert "011-0111" not in warning_text
     assert "ValueError" in warning_text
 
-
 def test_deidentify_csv_stable_patient_names_missing_env_secret_fails_safely(tmp_path, monkeypatch):
-    """Missing or empty name-secret environment variables fail stable-name rows safely."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -542,9 +495,7 @@ def test_deidentify_csv_stable_patient_names_missing_env_secret_fails_safely(tmp
     assert summary["rows_written"] == 0
     assert summary["rows_failed"] == 1
 
-
 def test_deidentify_csv_stable_patient_names_types_excluding_names_fail_safely(tmp_path):
-    """Stable-name rows fail safely when requested pyDeid types exclude names."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"

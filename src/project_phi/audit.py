@@ -58,6 +58,9 @@ from .models import PHISpan
 # - project_title_context_policy: Title-context false-positive policy applied to this span.
 # - project_title_context_trigger: Title pattern that made the action-word veto eligible.
 # - project_title_context_word: Normalized action word preserved by the veto.
+# - project_ordinary_token_policy: Ordinary-token false-positive policy applied to this span.
+# - project_ordinary_token: Short token preserved by the ordinary-token veto.
+# - project_ordinary_token_category: Token category, such as pronoun_or_article.
 #
 # Audit rows intentionally omit PHISpan.text and original note text.
 AUDIT_COLUMNS = [
@@ -93,6 +96,9 @@ AUDIT_COLUMNS = [
     "project_title_context_policy",
     "project_title_context_trigger",
     "project_title_context_word",
+    "project_ordinary_token_policy",
+    "project_ordinary_token",
+    "project_ordinary_token_category",
 ]
 
 
@@ -151,6 +157,9 @@ def _span_to_audit_row(
         "project_title_context_policy": span.metadata.get("project_title_context_policy"),
         "project_title_context_trigger": span.metadata.get("project_title_context_trigger"),
         "project_title_context_word": span.metadata.get("project_title_context_word"),
+        "project_ordinary_token_policy": span.metadata.get("project_ordinary_token_policy"),
+        "project_ordinary_token": span.metadata.get("project_ordinary_token"),
+        "project_ordinary_token_category": span.metadata.get("project_ordinary_token_category"),
     }
 
 
@@ -208,6 +217,9 @@ def _write_warning_audit_row(
             "project_title_context_policy": "",
             "project_title_context_trigger": "",
             "project_title_context_word": "",
+            "project_ordinary_token_policy": "",
+            "project_ordinary_token": "",
+            "project_ordinary_token_category": "",
         }
     )
 

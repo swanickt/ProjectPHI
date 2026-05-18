@@ -21,8 +21,9 @@ Replacement priority:
 2. Preserve narrow clinical abbreviation false positives such as `PMHx`.
 3. Apply stable date shifting/preservation/fallback when date shifting is enabled.
 4. Apply stable patient-name aliases when name replacement is enabled.
-5. Preserve narrow title-context action-word false positives.
-6. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
+5. Preserve narrow ordinary-token false positives such as articles/pronouns.
+6. Preserve narrow title-context action-word false positives.
+7. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
 
 Examples:
     Original:
@@ -68,6 +69,49 @@ from .protected_terms import _protected_term_match, _protected_term_metadata
 from .title_context import (
     _title_context_action_word_match,
     _title_context_action_word_metadata,
+)
+
+_ORDINARY_ARTICLE_PRONOUN_TOKENS = {
+    "a",
+    "an",
+    "he",
+    "her",
+    "his",
+    "she",
+    "the",
+}
+
+_INITIAL_CONTEXT_PREFIXES = (
+    "case",
+    "control",
+    "dr",
+    "doctor",
+    "family",
+    "mr",
+    "mrs",
+    "ms",
+    "patient",
+    "participant",
+    "subject",
+)
+
+_NH_CONTEXT_AFTER = (
+    " resident",
+    " patient",
+    " facility",
+    " placement",
+    " transfer",
+    " staff",
+)
+
+_NH_CONTEXT_BEFORE = (
+    " from ",
+    " at ",
+    " in ",
+    " to ",
+    " transferred from ",
+    " sent from ",
+    " discharged to ",
 )
 
 
@@ -254,12 +298,16 @@ def _project_replacement_for_span(
        replace explicit patient aliases with the deterministic fake patient
        identity.
 
-    5. Title-context action-word veto:
+    5. Ordinary-token veto:
+       preserve selected articles, pronouns, and clinical shorthand that pyDeid
+       emitted as very short name spans when context supports a non-name read.
+
+    6. Title-context action-word veto:
        preserve narrow clinical action words that pyDeid emitted as
        title-derived name spans in `Dr.` contexts. Lower-case words use the
        base rule; capitalized words require following clinical-object context.
 
-    6. pyDeid fallback:
+    7. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
 
     Args:
@@ -362,6 +410,15 @@ def _project_replacement_for_span(
             replacement_text, match_type = name_replacement
             return replacement_text, "project_stable_patient_name", match_type, {}
 
+    ordinary_token_match = _ordinary_token_veto_metadata(span, original_text)
+    if ordinary_token_match is not None:
+        return (
+            span.text,
+            "project_ordinary_token_veto",
+            ordinary_token_match["project_ordinary_token_policy"],
+            ordinary_token_match,
+        )
+
     title_context_match = _title_context_action_word_match(
         span,
         original_text=original_text,
@@ -381,6 +438,41 @@ def _project_replacement_for_span(
 
     # Final fallback for all other spans.
     return span.replacement or "<PHI>", "pyDeid", "pydeid_replacement", {}
+
+
+def _ordinary_token_veto_metadata(
+    span: PHISpan,
+    original_text: str,
+) -> dict[str, str] | None:
+    """Return metadata for very narrow common-token name false positives.
+
+    This is not a name detector. It only preserves selected pyDeid-emitted
+    `NAME` spans whose whole text is a common article/pronoun or the observed
+    nursing-home shorthand `NH`, and only when simple local guards suggest that
+    preserving the token is safer than replacing it.
+    """
+    if span.label != "NAME":
+        return None
+
+    token = span.text
+    normalized = token.casefold()
+    if normalized in _ORDINARY_ARTICLE_PRONOUN_TOKENS:
+        if _looks_like_initial_or_case_label_context(span, original_text):
+            return None
+        return {
+            "project_ordinary_token_policy": "preserved_pronoun_or_article",
+            "project_ordinary_token": token,
+            "project_ordinary_token_category": "pronoun_or_article",
+        }
+
+    if token == "NH" and _has_nursing_home_context(span, original_text):
+        return {
+            "project_ordinary_token_policy": "preserved_clinical_shorthand",
+            "project_ordinary_token": token,
+            "project_ordinary_token_category": "nursing_home",
+        }
+
+    return None
 
 
 def _clinical_abbreviation_veto_metadata(
@@ -405,3 +497,36 @@ def _clinical_abbreviation_veto_metadata(
         "project_clinical_abbreviation_policy": "preserved_pmhx_site_acronym_overlap",
         "project_clinical_abbreviation": original_text[span.start : span.end + 1],
     }
+
+
+def _looks_like_initial_or_case_label_context(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true when a short token is likely an initial/case label."""
+    before = original_text[max(0, span.start - 24) : span.start]
+    after = original_text[span.end : min(len(original_text), span.end + 24)]
+    before_words = before.lower().replace(".", " ").split()
+    previous_word = before_words[-1] if before_words else ""
+
+    if previous_word in _INITIAL_CONTEXT_PREFIXES:
+        return True
+    if after.startswith(".") or after.startswith(" ."):
+        return True
+    if after.startswith("-"):
+        return True
+    if len(span.text) == 1 and after[:1].isupper():
+        return True
+    return False
+
+
+def _has_nursing_home_context(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true for narrow nursing-home shorthand contexts around `NH`."""
+    before = original_text[max(0, span.start - 32) : span.start].lower()
+    after = original_text[span.end : min(len(original_text), span.end + 32)].lower()
+    return any(after.startswith(term) for term in _NH_CONTEXT_AFTER) or any(
+        term in before for term in _NH_CONTEXT_BEFORE
+    )

@@ -45,6 +45,81 @@ def test_reconstruction_preserves_lowercase_action_word_after_title():
     assert note[spans[0].start : spans[0].end] == "examined"
 
 
+def test_reconstruction_preserves_article_name_false_positive():
+    note = "The patient comes to the physician for a 3-month history of fatigue."
+    span = _name_span("a", note.index("a 3-month"), replacement="Maxwell", pydeid_types=["Name Initial (PRE)"])
+
+    text, spans, warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == note
+    assert warnings == []
+    assert spans[0].action == "preserved"
+    assert spans[0].metadata["replacement_source"] == "project_ordinary_token_veto"
+    assert spans[0].metadata["project_ordinary_token_policy"] == "preserved_pronoun_or_article"
+    assert spans[0].metadata["project_ordinary_token"] == "a"
+    assert spans[0].metadata["project_ordinary_token_category"] == "pronoun_or_article"
+
+
+def test_reconstruction_preserves_pronoun_name_false_positives():
+    examples = [
+        ("He currently uses inhaled corticosteroid.", "He"),
+        ("Her family history is negative.", "Her"),
+        ("An rRT-PCR for synthetic virus was negative.", "An"),
+    ]
+
+    for note, token in examples:
+        span = _name_span(token, note.index(token), replacement="Carter", pydeid_types=["Name (NI)"])
+
+        text, spans, warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+        assert text == note
+        assert warnings == []
+        assert spans[0].metadata["replacement_source"] == "project_ordinary_token_veto"
+
+
+def test_reconstruction_preserves_nh_only_in_nursing_home_context():
+    note = "A 87 year old female NH resident presented with abdominal pain."
+    span = _name_span("NH", note.index("NH"), replacement="Donna", pydeid_types=["Name8 (MD)"])
+
+    text, spans, warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == note
+    assert warnings == []
+    assert spans[0].metadata["replacement_source"] == "project_ordinary_token_veto"
+    assert spans[0].metadata["project_ordinary_token_policy"] == "preserved_clinical_shorthand"
+    assert spans[0].metadata["project_ordinary_token_category"] == "nursing_home"
+
+
+def test_reconstruction_does_not_preserve_article_in_initial_contexts():
+    examples = [
+        ("A. Smith reviewed the note.", "A"),
+        ("Dr. A reviewed the note.", "A"),
+        ("Patient A enrolled.", "A"),
+        ("Subject A reported symptoms.", "A"),
+        ("Case A was excluded.", "A"),
+        ("Mr. A called.", "A"),
+        ("Ms. A called.", "A"),
+    ]
+
+    for note, token in examples:
+        span = _name_span(token, note.index(token), replacement="Carter", pydeid_types=["Name Initial (PRE)"])
+
+        text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+        assert text != note
+        assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_does_not_preserve_nh_without_nursing_home_context():
+    note = "Synthetic NH marker was recorded."
+    span = _name_span("NH", note.index("NH"), replacement="Donna", pydeid_types=["Name8 (MD)"])
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == "Synthetic Donna marker was recorded."
+    assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
 def test_reconstruction_preserves_action_word_after_single_title_name_span():
     note = "Dr. Solen reviewed mammography."
     spans = [
