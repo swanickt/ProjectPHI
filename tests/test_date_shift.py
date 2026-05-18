@@ -1,24 +1,4 @@
-"""Stable date-shift behavior and offset-separation tests.
-
-These tests cover ProjectPHI's stable date-shifting policy for pyDeid-detected
-date spans.
-
-Main contracts covered:
-- the same patient/secret pair gets the same deterministic day offset;
-- all parseable dates for one patient use the same offset;
-- intervals between dates are preserved after shifting;
-- ISO full dates and supported English full dates are shifted safely;
-- supported `Month YYYY` spans are shifted with an internal anchor day while
-  preserving visible month/year granularity;
-- year-only, time, holiday/season, and unparseable date-like spans are handled
-  by preservation or safe fallback policy;
-- original-note offsets, pyDeid surrogate offsets, and ProjectPHI final
-  replacement offsets remain separate;
-- secrets, raw note text, and raw unparseable date text are not copied into
-  warnings/errors.
-
-All examples are synthetic.
-"""
+"""Stable date-shift behavior and offset-separation tests."""
 
 from datetime import date, datetime, timedelta
 
@@ -30,25 +10,10 @@ from conftest import _date_spans
 
 
 def _natural_date(text):
-    """Parse ProjectPHI's supported English full-date output shape.
-
-    Example:
-        `"March 14, 2026"` is parsed as `date(2026, 3, 14)`.
-    """
     return datetime.strptime(text, "%B %d, %Y").date()
 
 
 def _month_year_date(text):
-    """Parse ProjectPHI's supported English month/year output shape.
-
-    Example:
-        `"March 2021"` is parsed as `date(2021, 3, 1)`.
-
-    Note:
-        `datetime.strptime(..., "%B %Y")` fills in day `1` by default. This is
-        only for test comparison/ordering; ProjectPHI's actual month/year shift
-        policy uses its own internal anchor day.
-    """
     return datetime.strptime(text, "%B %Y").date()
 
 
@@ -268,6 +233,181 @@ def test_stable_date_shift_month_year_uses_same_patient_offset_as_full_date():
     assert _natural_date(full_date_span.replacement) == _natural_date(full_date_span.text) + timedelta(
         days=month_year_span.metadata["project_date_shift_days"]
     )
+
+def test_stable_date_shift_preserves_score_fraction_in_date_span():
+    note = "The patient scored 1/50 points on the synthetic assessment tool."
+    span = PHISpan(
+        start=19,
+        end=23,
+        text="1/50",
+        label="DATE",
+        source="pyDeid",
+        replacement="January 2050",
+        pydeid_types=["Month/Year (2) [mm/yy]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "1", "year": "50"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=30,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    final_span = final_spans[0]
+    assert final_span.action == "preserved"
+    assert final_span.replacement == "1/50"
+    assert final_span.metadata["replacement_source"] == "preserved"
+    assert final_span.metadata["project_date_shift_policy"] == "preserved_score_or_fraction"
+    assert final_span.metadata["project_date_shift_preservation_reason"] == "score_or_fraction_context"
+    project_start = final_span.metadata["project_replacement_start"]
+    project_end = final_span.metadata["project_replacement_end"]
+    assert deidentified_text[project_start:project_end] == "1/50"
+
+def test_stable_date_shift_preserves_staging_fraction_in_date_span():
+    note = "The pathological stage was ypT4 N1 (1/61) M0 after surgery."
+    start = note.index("1/61")
+    span = PHISpan(
+        start=start,
+        end=start + len("1/61"),
+        text="1/61",
+        label="DATE",
+        source="pyDeid",
+        replacement="February 2061",
+        pydeid_types=["Month/Year (2) [mm/yy]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "1", "year": "61"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=30,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    assert final_spans[0].metadata["project_date_shift_policy"] == "preserved_score_or_fraction"
+
+def test_stable_date_shift_preserves_visual_acuity_fraction_in_date_span():
+    note = "Visual acuity in the left eye is 6/60 and right eye is counting fingers."
+    start = note.index("6/60")
+    span = PHISpan(
+        start=start,
+        end=start + len("6/60"),
+        text="6/60",
+        label="DATE",
+        source="pyDeid",
+        replacement="June 2060",
+        pydeid_types=["Month/Year (2) [mm/yy]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "6", "year": "60"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=-20,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    assert final_spans[0].metadata["project_date_shift_policy"] == "preserved_score_or_fraction"
+
+def test_stable_date_shift_still_shifts_slash_month_year_without_fraction_context():
+    note = "Follow-up occurred in 10/2021."
+    start = note.index("10/2021")
+    span = PHISpan(
+        start=start,
+        end=start + len("10/2021"),
+        text="10/2021",
+        label="DATE",
+        source="pyDeid",
+        replacement="January 2022",
+        pydeid_types=["Month/Year 1 [mm/yy(yy)]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "10", "year": "2021"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=31,
+        date_shift_days=45,
+    )
+
+    assert "10/2021" not in deidentified_text
+    assert final_spans[0].replacement == "November 2021"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_month_year"
+    assert warnings == []
+
+def test_reconstruction_preserves_pmhx_site_acronym_overlap():
+    note = "A 75F with a PMHx significant for severe PVD."
+    start = note.index("PMH")
+    span = PHISpan(
+        start=start,
+        end=start + len("PMH"),
+        text="PMH",
+        label="HOSPITAL",
+        source="pyDeid",
+        replacement="SMH",
+        pydeid_types=["Site Acronym"],
+        metadata={
+            "pydeid_replacement": "SMH",
+            "pydeid_surrogate_start": start,
+            "pydeid_surrogate_end": start + len("SMH"),
+        },
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    final_span = final_spans[0]
+    assert final_span.action == "preserved"
+    assert final_span.replacement == "PMH"
+    assert final_span.metadata["replacement_source"] == "project_clinical_abbreviation_veto"
+    assert (
+        final_span.metadata["project_clinical_abbreviation_policy"]
+        == "preserved_pmhx_site_acronym_overlap"
+    )
+    assert final_span.metadata["project_clinical_abbreviation"] == "PMHx"
+
+def test_reconstruction_still_replaces_standalone_pmh_site_acronym():
+    note = "Transferred from PMH for review."
+    start = note.index("PMH")
+    span = PHISpan(
+        start=start,
+        end=start + len("PMH"),
+        text="PMH",
+        label="HOSPITAL",
+        source="pyDeid",
+        replacement="SMH",
+        pydeid_types=["Site Acronym"],
+        metadata={},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+    )
+
+    assert deidentified_text == "Transferred from SMH for review."
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+
+def test_deidentify_note_preserves_pmhx_when_pydeid_flags_pmh_substring():
+    note = "A 75F with a PMHx significant for severe PVD."
+
+    result = deidentify_note(note, patient_id="Patient/synth-pmhx-001")
+
+    assert "PMHx" in result.deidentified_text
+    pmh_span = next(span for span in result.spans if span.text == "PMH")
+    assert pmh_span.metadata["replacement_source"] == "project_clinical_abbreviation_veto"
 
 def test_stable_date_shift_removes_original_date_and_keeps_non_date_phi_replaced():
     note = "Test MRN: 011-0111. Follow-up on 2001-12-10."

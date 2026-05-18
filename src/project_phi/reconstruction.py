@@ -18,10 +18,11 @@ Offset convention:
 
 Replacement priority:
 1. Preserve protected clinical terms when a pyDeid span exactly matches one.
-2. Apply stable date shifting/preservation/fallback when date shifting is enabled.
-3. Apply stable patient-name aliases when name replacement is enabled.
-4. Preserve narrow title-context action-word false positives.
-5. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
+2. Preserve narrow clinical abbreviation false positives such as `PMHx`.
+3. Apply stable date shifting/preservation/fallback when date shifting is enabled.
+4. Apply stable patient-name aliases when name replacement is enabled.
+5. Preserve narrow title-context action-word false positives.
+6. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
 
 Examples:
     Original:
@@ -54,8 +55,10 @@ from .date_shift import (
     _is_holiday_or_season_span,
     _is_parseable_month_year_span,
     _is_parseable_full_date_span,
+    _is_score_or_fraction_date_span,
     _is_time_span,
     _is_year_only_span,
+    _score_or_fraction_date_metadata,
     _shift_full_date_span,
     _shift_month_year_span,
 )
@@ -238,21 +241,25 @@ def _project_replacement_for_span(
        preserve the original span text when pyDeid emitted a span that exactly
        matches a protected clinical term.
 
-    2. Stable date policy:
-       shift parseable full dates and month/year spans; preserve times,
-       year-only spans, holidays, and seasons; replace unparseable date-like
-       spans with `<DATE>`.
+    2. Clinical abbreviation veto:
+       preserve selected clinical abbreviations that pyDeid emits as facility
+       acronyms inside longer clinical shorthand.
 
-    3. Stable patient-name policy:
+    3. Stable date policy:
+       shift parseable full dates and month/year spans; preserve times,
+       score/fraction notation, year-only spans, holidays, and seasons; replace
+       unparseable date-like spans with `<DATE>`.
+
+    4. Stable patient-name policy:
        replace explicit patient aliases with the deterministic fake patient
        identity.
 
-    4. Title-context action-word veto:
+    5. Title-context action-word veto:
        preserve narrow clinical action words that pyDeid emitted as
        title-derived name spans in `Dr.` contexts. Lower-case words use the
        base rule; capitalized words require following clinical-object context.
 
-    5. pyDeid fallback:
+    6. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
 
     Args:
@@ -293,9 +300,26 @@ def _project_replacement_for_span(
             _protected_term_metadata(protected_match),
         )
 
+    clinical_abbreviation_match = _clinical_abbreviation_veto_metadata(span, original_text)
+    if clinical_abbreviation_match is not None:
+        return (
+            span.text,
+            "project_clinical_abbreviation_veto",
+            clinical_abbreviation_match["project_clinical_abbreviation_policy"],
+            clinical_abbreviation_match,
+        )
+
     # Date policy: shift parseable dates, preserve date-like spans that should
     # not receive day-level shifting, and use a safe placeholder for unparseable
     # date-like spans.
+    if date_shift_offset is not None and _is_score_or_fraction_date_span(span, original_text):
+        return (
+            span.text,
+            "preserved",
+            "preserved_score_or_fraction",
+            _score_or_fraction_date_metadata(),
+        )
+
     if date_shift_offset is not None and _is_parseable_full_date_span(span):
         shifted_text = _shift_full_date_span(span, date_shift_offset)
         if shifted_text is not None:
@@ -357,3 +381,27 @@ def _project_replacement_for_span(
 
     # Final fallback for all other spans.
     return span.replacement or "<PHI>", "pyDeid", "pydeid_replacement", {}
+
+
+def _clinical_abbreviation_veto_metadata(
+    span: PHISpan,
+    original_text: str,
+) -> dict[str, str] | None:
+    """Return metadata when a pyDeid facility acronym is clinical shorthand.
+
+    pyDeid's hospital acronym list includes `PMH`. Its acronym matcher can emit
+    `PMH` inside `PMHx`, which is common shorthand for past medical history.
+    This project veto is intentionally narrow and span-local: it only preserves
+    the pyDeid-emitted `PMH` span when the next source character is `x`/`X`.
+    """
+    if span.text.upper() != "PMH":
+        return None
+    if "site acronym" not in " ".join(span.pydeid_types or []).lower():
+        return None
+    if span.end >= len(original_text) or original_text[span.end] not in {"x", "X"}:
+        return None
+
+    return {
+        "project_clinical_abbreviation_policy": "preserved_pmhx_site_acronym_overlap",
+        "project_clinical_abbreviation": original_text[span.start : span.end + 1],
+    }
