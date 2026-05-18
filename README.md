@@ -7,7 +7,7 @@ risk while preserving clinically useful text for downstream review and possible 
 It is not a legal certification tool. It does not guarantee full text de-identification,
 anonymization, PHIPA compliance, HIPAA compliance, or external-release safety.
 
-## Documentation
+## Documentation (NOTE: These doc files are currently a local work in progress)
 
 Start with [docs/00_index.md](docs/00_index.md).
 
@@ -405,7 +405,7 @@ project-phi-deid synthetic_input.csv synthetic_output.csv \
   --custom-regex-json synthetic_regexes.json
 ```
 
-Observed CLI summary and synthetic output from the current test environment:
+Output:
 
 ```text
 synthetic_regexes.json:
