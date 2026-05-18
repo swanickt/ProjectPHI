@@ -248,8 +248,9 @@ def _project_replacement_for_span(
        identity.
 
     4. Title-context action-word veto:
-       preserve lower-case clinical action words that pyDeid emitted as
-       title-derived name spans in narrow `Dr.` contexts.
+       preserve narrow clinical action words that pyDeid emitted as
+       title-derived name spans in `Dr.` contexts. Lower-case words use the
+       base rule; capitalized words require following clinical-object context.
 
     5. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
@@ -347,7 +348,7 @@ def _project_replacement_for_span(
         return (
             span.text,
             "project_title_context_action_word_veto",
-            "title_context_action_word_exact_match",
+            title_context_match["project_title_context_policy"],
             _title_context_action_word_metadata(title_context_match),
         )
 

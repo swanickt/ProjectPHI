@@ -1,25 +1,4 @@
-"""Title-context action-word veto tests using synthetic examples only.
-
-These tests cover ProjectPHI's title-context action-word veto.
-
-The policy protects common lowercase clinical action words that pyDeid may
-mistakenly classify as names after a title-like token such as `Dr.`. The veto is
-span-local and conservative: it preserves only supported lowercase action words
-in strict title context, while leaving real names, capitalized tokens, custom
-name-list matches, and known patient aliases to their normal replacement
-policies.
-
-Main contracts covered:
-- lowercase action words after title context can be preserved;
-- normal title-name spans are still replaced by pyDeid;
-- capitalized action-looking tokens are not preserved;
-- action words outside title context are not preserved;
-- explicit patient aliases take priority over the title-context veto;
-- custom pyDeid name-list spans and pyDeid name-list guards block the veto;
-- the public note and CSV workflows record title-context metadata safely.
-
-All examples are synthetic.
-"""
+"""Title-context action-word veto tests using synthetic examples only."""
 
 from project_phi import PHISpan, deidentify_csv, deidentify_note
 import project_phi.reconstruction as reconstruction
@@ -29,19 +8,6 @@ from conftest import _read_csv, _write_csv
 
 
 def _name_span(text, start, *, replacement="Carter", pydeid_types=None):
-    """Build a synthetic pyDeid-like name span for reconstruction tests.
-
-    The default span pretends pyDeid detected `text` as a name and assigned the
-    replacement `"Carter"`. Tests then check whether reconstruction preserves the
-    span through title-context policy or falls back to the pyDeid replacement.
-
-    Example:
-        `_name_span("examined", 8)` creates a span with:
-        - original text `"examined"`;
-        - original-note offsets `8:16`;
-        - label `"NAME"`;
-        - pyDeid replacement `"Carter"`.
-    """
     return PHISpan(
         start=start,
         end=start + len(text),
@@ -58,11 +24,7 @@ def _name_span(text, start, *, replacement="Carter", pydeid_types=None):
     )
 
 
-# Direct reconstruction behavior.
-
-
 def test_reconstruction_preserves_lowercase_action_word_after_title():
-    """A lowercase action word in strict title context is preserved."""
     note = "The Dr. examined the patient."
     span = _name_span("examined", 8)
 
@@ -84,7 +46,6 @@ def test_reconstruction_preserves_lowercase_action_word_after_title():
 
 
 def test_reconstruction_preserves_action_word_after_single_title_name_span():
-    """A normal title-name span can be replaced while the following action word is preserved."""
     note = "Dr. Solen reviewed mammography."
     spans = [
         _name_span("Solen", 4, replacement="Bennett"),
@@ -103,21 +64,240 @@ def test_reconstruction_preserves_action_word_after_single_title_name_span():
     assert final_spans[1].action == "preserved"
 
 
-def test_reconstruction_does_not_preserve_capitalized_action_word_after_title():
-    """Capitalized title-context tokens are treated as names and use pyDeid replacement."""
+def test_reconstruction_preserves_capitalized_action_word_with_generic_patient_object():
     note = "Dr. Examined the patient."
     span = _name_span("Examined", 4)
 
+    text, spans, warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == note
+    assert warnings == []
+    assert spans[0].action == "preserved"
+    assert spans[0].metadata["replacement_source"] == "project_title_context_action_word_veto"
+    assert spans[0].metadata["project_title_context_policy"] == (
+        "title_context_capitalized_action_word_generic_patient_object_match"
+    )
+    assert spans[0].metadata["project_title_context_trigger"] == (
+        "strict_title_name_heuristic_with_generic_patient_object"
+    )
+
+
+def test_reconstruction_preserves_capitalized_action_word_with_clinical_object():
+    note = "Dr. Examined the chest wall."
+    span = _name_span("Examined", 4)
+
+    text, spans, warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == note
+    assert warnings == []
+    assert spans[0].action == "preserved"
+    assert spans[0].metadata["replacement_source"] == "project_title_context_action_word_veto"
+    assert spans[0].metadata["project_title_context_policy"] == (
+        "title_context_capitalized_action_word_clinical_object_match"
+    )
+    assert spans[0].metadata["project_title_context_trigger"] == (
+        "strict_title_name_heuristic_with_clinical_object"
+    )
+    assert spans[0].metadata["project_title_context_word"] == "examined"
+
+
+def test_reconstruction_preserves_clinical_object_span_after_title_action_word():
+    note = "Dr. Assessed skin toxicity as grade 1."
+    spans = [
+        _name_span("Assessed", 4),
+        _name_span("skin", 13, replacement="Avery", pydeid_types=["Name (STitle)"]),
+    ]
+
+    text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert text == note
+    assert warnings == []
+    assert final_spans[0].metadata["project_title_context_policy"] == (
+        "title_context_capitalized_action_word_clinical_object_match"
+    )
+    assert final_spans[1].metadata["project_title_context_policy"] == (
+        "title_context_clinical_object_after_action_match"
+    )
+    assert final_spans[1].metadata["project_title_context_word"] == "skin"
+
+
+def test_reconstruction_preserves_capitalized_action_word_after_lowercase_dr():
+    note = "dr. Reviewed mammography with tomosynthesis."
+    span = _name_span("Reviewed", 4)
+
     text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
 
-    assert text == "Dr. Carter the patient."
-    assert spans[0].action == "replaced"
+    assert text == note
+    assert spans[0].metadata["replacement_source"] == "project_title_context_action_word_veto"
+    assert spans[0].metadata["project_title_context_policy"] == (
+        "title_context_capitalized_action_word_clinical_object_match"
+    )
+
+
+def test_reconstruction_preserves_capitalized_action_word_after_dr_without_period():
+    note = "Dr Assessed skin toxicity as grade 1."
+    span = _name_span("Assessed", 3)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == note
+    assert spans[0].metadata["project_title_context_word"] == "assessed"
+
+
+def test_reconstruction_does_not_preserve_capitalized_action_word_with_incomplete_context():
+    for note in ["Dr. Examined the.", "Dr. Examined and."]:
+        span = _name_span("Examined", 4)
+
+        text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+        assert text != note
+        assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_preserves_capitalized_action_word_after_clinical_role():
+    note = "nurse Reviewed mammography with tomosynthesis."
+    span = _name_span("Reviewed", 6)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == note
+    assert spans[0].metadata["replacement_source"] == "project_title_context_action_word_veto"
+    assert spans[0].metadata["project_title_context_policy"] == (
+        "role_context_capitalized_action_word_clinical_object_match"
+    )
+    assert spans[0].metadata["project_title_context_trigger"] == (
+        "clinical_role_context_with_clinical_object"
+    )
+
+
+def test_reconstruction_preserves_capitalized_action_word_after_multiword_role():
+    note = "Social worker Discussed transportation barriers."
+    span = _name_span("Discussed", 14)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == note
+    assert spans[0].metadata["project_title_context_policy"] == (
+        "role_context_capitalized_action_word_clinical_object_match"
+    )
+
+
+def test_reconstruction_preserves_role_action_with_generic_patient_object():
+    note = "Oncologist Discussed the family."
+    span = _name_span("Discussed", 11)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == note
+    assert spans[0].metadata["project_title_context_policy"] == (
+        "role_context_capitalized_action_word_generic_patient_object_match"
+    )
+
+
+def test_reconstruction_does_not_preserve_capitalized_real_name_even_with_object_context():
+    note = "Dr. Cook mammography with tomosynthesis."
+    span = _name_span("Cook", 4)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == "Dr. Carter mammography with tomosynthesis."
     assert spans[0].metadata["replacement_source"] == "pyDeid"
-    assert "project_title_context_policy" not in spans[0].metadata
+
+
+def test_reconstruction_does_not_preserve_capitalized_real_name_after_role():
+    note = "Nurse Taylor reviewed wound care."
+    span = _name_span("Taylor", 6)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == "Nurse Carter reviewed wound care."
+    assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_preserves_lowercase_action_after_role_name_span():
+    note = "Nurse Taylor reviewed wound care."
+    spans = [
+        _name_span("Taylor", 6, replacement="Bennett", pydeid_types=["First Name (Titles)"]),
+        _name_span("reviewed", 13, replacement="Avery", pydeid_types=["Last Name (Titles)"]),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert text == "Nurse Bennett reviewed wound care."
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+    assert final_spans[1].metadata["replacement_source"] == "project_title_context_action_word_veto"
+    assert final_spans[1].metadata["project_title_context_policy"] == (
+        "role_context_lowercase_action_word_clinical_object_after_name_match"
+    )
+
+
+def test_reconstruction_preserves_lowercase_action_after_title_name_span():
+    note = "Dr. Solen discussed the patient."
+    spans = [
+        _name_span("Solen", 4, replacement="Bennett"),
+        _name_span("discussed", 10, replacement="Avery", pydeid_types=["Name (STitle)"]),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert text == "Dr. Bennett discussed the patient."
+    assert final_spans[1].metadata["project_title_context_policy"] == (
+        "title_context_lowercase_action_word_generic_patient_object_after_name_match"
+    )
+
+
+def test_reconstruction_does_not_preserve_lowercase_action_after_role_name_without_object():
+    note = "Nurse Taylor reviewed."
+    spans = [
+        _name_span("Taylor", 6, replacement="Bennett", pydeid_types=["First Name (Titles)"]),
+        _name_span("reviewed", 13, replacement="Avery", pydeid_types=["Last Name (Titles)"]),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert text == "Nurse Bennett Avery."
+    assert final_spans[1].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_does_not_preserve_lowercase_action_after_patient_alias_name():
+    note = "Nurse Taylor reviewed wound care."
+    spans = [
+        _name_span("Taylor", 6, replacement="Bennett", pydeid_types=["Custom Patient First Name"]),
+        _name_span("reviewed", 13, replacement="Avery", pydeid_types=["Last Name (Titles)"]),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert text == "Nurse Bennett Avery wound care."
+    assert final_spans[1].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_does_not_preserve_role_action_without_following_context():
+    note = "Surgeon Discussed."
+    span = _name_span("Discussed", 8)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == "Surgeon Carter."
+    assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
 def test_reconstruction_does_not_preserve_action_word_without_title_context():
-    """Action-looking words outside title context are not preserved by this veto."""
     note = "The note reviewed mammography."
     span = _name_span("reviewed", 9, replacement="Avery", pydeid_types=["Name (STitle)"])
 
@@ -127,11 +307,7 @@ def test_reconstruction_does_not_preserve_action_word_without_title_context():
     assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
-# Priority/guard behavior.
-
-
 def test_reconstruction_patient_alias_wins_over_action_word_veto():
-    """Explicit patient aliases take priority over the title-context action-word veto."""
     note = "Dr. reviewed the patient."
     span = _name_span("reviewed", 4)
     alias_profile = _build_patient_alias_profile(["reviewed"])
@@ -150,7 +326,6 @@ def test_reconstruction_patient_alias_wins_over_action_word_veto():
 
 
 def test_reconstruction_custom_name_list_span_blocks_action_word_veto():
-    """Custom pyDeid name-list matches are not overridden by title-context preservation."""
     note = "Dr. reviewed the patient."
     span = _name_span(
         "reviewed",
@@ -165,7 +340,6 @@ def test_reconstruction_custom_name_list_span_blocks_action_word_veto():
 
 
 def test_reconstruction_pydeid_name_list_guard_blocks_action_word_veto(monkeypatch):
-    """Words present in pyDeid's name lists are guarded from action-word preservation."""
     note = "Dr. reviewed the patient."
     span = _name_span("reviewed", 4)
 
@@ -177,11 +351,7 @@ def test_reconstruction_pydeid_name_list_guard_blocks_action_word_veto(monkeypat
     assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
-# Public note workflow behavior.
-
-
 def test_deidentify_note_preserves_title_context_action_words_from_pydeid():
-    """The public note workflow preserves pyDeid-emitted title-context action words."""
     note = "The Dr. examined the patient. Dr. Solen reviewed mammography."
 
     result = deidentify_note(note)
@@ -198,7 +368,6 @@ def test_deidentify_note_preserves_title_context_action_words_from_pydeid():
 
 
 def test_deidentify_note_preserves_protected_term_plus_following_action_word():
-    """Protected-term preservation can coexist with a following title-context action word."""
     note = "Dr. Tomosynthesis reviewed mammography with tomosynthesis."
 
     result = deidentify_note(note)
@@ -216,24 +385,57 @@ def test_deidentify_note_preserves_protected_term_plus_following_action_word():
     )
 
 
-def test_deidentify_note_keeps_capitalized_title_token_as_pydeid_replacement():
-    """The public workflow does not preserve capitalized action-looking name spans."""
-    note = "Dr. Examined the patient."
+def test_deidentify_note_preserves_capitalized_title_action_with_clinical_object():
+    note = "Dr. Examined the chest wall. Dr. Assessed skin toxicity as grade 1."
 
     result = deidentify_note(note)
 
-    assert "Examined" not in result.deidentified_text
-    assert not any(
+    assert result.deidentified_text == note
+    assert any(
         span.metadata.get("replacement_source") == "project_title_context_action_word_veto"
+        and span.metadata.get("project_title_context_policy")
+        == "title_context_capitalized_action_word_clinical_object_match"
+        for span in result.spans
+    )
+    assert any(
+        span.text == "skin"
+        and span.metadata.get("project_title_context_policy")
+        == "title_context_clinical_object_after_action_match"
         for span in result.spans
     )
 
 
-# CSV/audit behavior.
+def test_deidentify_note_preserves_capitalized_title_action_with_generic_patient_object():
+    note = "Dr. Examined the patient."
+
+    result = deidentify_note(note)
+
+    assert result.deidentified_text == note
+    assert any(
+        span.metadata.get("project_title_context_policy")
+        == "title_context_capitalized_action_word_generic_patient_object_match"
+        for span in result.spans
+    )
+
+
+def test_deidentify_note_preserves_role_context_action_words_from_pydeid():
+    note = "Nurse Reviewed wound care. Nurse Taylor reviewed wound care."
+
+    result = deidentify_note(note)
+
+    assert "Nurse Reviewed wound care." in result.deidentified_text
+    assert "reviewed wound care" in result.deidentified_text
+    assert "Taylor" not in result.deidentified_text
+    role_policies = {
+        span.metadata.get("project_title_context_policy")
+        for span in result.spans
+        if span.metadata.get("replacement_source") == "project_title_context_action_word_veto"
+    }
+    assert "role_context_capitalized_action_word_clinical_object_match" in role_policies
+    assert "role_context_lowercase_action_word_clinical_object_after_name_match" in role_policies
 
 
 def test_deidentify_csv_audit_records_title_context_metadata(tmp_path):
-    """CSV audit output records title-context policy metadata without changing the note."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
