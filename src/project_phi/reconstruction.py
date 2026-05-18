@@ -17,7 +17,8 @@ Offset convention:
   refer to the final ProjectPHI output text.
 
 Replacement priority:
-1. Preserve protected clinical terms when a pyDeid span exactly matches one.
+1. Preserve protected clinical terms when a pyDeid span exactly matches one, or
+   when a configured risky component appears inside an approved clinical phrase.
 2. Preserve narrow clinical abbreviation false positives such as `PMHx`.
 3. Apply stable date shifting/preservation/fallback when date shifting is enabled.
 4. Apply stable patient-name aliases when name replacement is enabled.
@@ -283,7 +284,8 @@ def _project_replacement_for_span(
 
     1. Protected clinical-term veto:
        preserve the original span text when pyDeid emitted a span that exactly
-       matches a protected clinical term.
+       matches a protected clinical term, or when a risky component is inside a
+       configured clinical tool/scale phrase.
 
     2. Clinical abbreviation veto:
        preserve selected clinical abbreviations that pyDeid emits as facility
@@ -339,7 +341,7 @@ def _project_replacement_for_span(
     Notes:
         This function does not mutate `span`.
     """
-    protected_match = _protected_term_match(span, protected_terms_profile)
+    protected_match = _protected_term_match(span, protected_terms_profile, original_text)
     if protected_match is not None:
         return (
             span.text,

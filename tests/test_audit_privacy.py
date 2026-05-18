@@ -99,6 +99,8 @@ def test_deidentify_csv_row_failure_is_sanitized_and_omitted(tmp_path, monkeypat
     assert audit_rows[0]["project_protected_term_policy"] == ""
     assert audit_rows[0]["project_protected_term_rule_id"] == ""
     assert audit_rows[0]["project_protected_term_category"] == ""
+    assert audit_rows[0]["project_protected_component"] == ""
+    assert audit_rows[0]["project_protected_within_phrase"] == ""
     assert audit_rows[0]["project_title_context_policy"] == ""
     assert audit_rows[0]["project_title_context_trigger"] == ""
     assert audit_rows[0]["project_title_context_word"] == ""

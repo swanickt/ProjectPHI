@@ -1,24 +1,8 @@
 """Load small runtime configuration files for the CSV pipeline.
 
-These helpers parse operator-supplied config files into the in-memory shapes
-already accepted by `deidentify_csv(...)`.
-
-They do not:
-- detect PHI;
-- infer aliases from notes;
-- run regex matching over note text;
-- scan notes for protected terms.
-
-Supported config files:
-- patient alias manifest CSV: `patient_id,alias`
-- custom regex JSON: rule ID -> `phi_type`, `pattern`, optional `replacement`
-- protected clinical terms CSV: `rule_id,category,term`
-
-Security notes:
-- validation errors use row numbers and generic messages;
-- raw regex patterns are not echoed in custom-regex validation errors;
-- protected term lists are not printed during validation;
-- these loaders should be treated as config ingestion, not de-identification.
+These helpers parse operator-supplied config into the in-memory shapes already
+accepted by `deidentify_csv(...)`. They do not detect PHI, infer aliases, or
+run regex matching over notes.
 """
 
 from __future__ import annotations
@@ -33,43 +17,16 @@ from .protected_terms import _build_protected_terms_profile
 
 
 def load_patient_alias_manifest(
-    path,
+    path,  # CSV path with patient_id,alias columns.
     *,
-    encoding="utf-8",
+    encoding="utf-8",  # File encoding for the manifest.
 ) -> dict[str, list[str]]:
-    """Load a patient-alias manifest CSV.
+    """Load `patient_id,alias` CSV into the alias mapping used by CSV runs.
 
-    Expected CSV columns:
-        patient_id,alias
-
-    Example:
-        patient_id,alias
-        P001,Jane Smith
-        P001,Jane
-        P001,Ms Smith
-        P002,Robert Chen
-
-    Returns:
-        Dictionary mapping each patient ID to aliases in file order:
-
-        {
-            "P001": ["Jane Smith", "Jane", "Ms Smith"],
-            "P002": ["Robert Chen"],
-        }
-
-    Behavior:
-        - trims surrounding whitespace from `patient_id` and `alias`;
-        - skips fully blank rows;
-        - preserves alias order per patient;
-        - does not infer aliases, validate whether aliases are real names, or
-          perform entity resolution.
-
-    Raises:
-        ValueError: If required columns are missing, or if a nonblank row has an
-        empty `patient_id` or `alias`.
-
-    Notes:
-        Error messages identify row numbers but do not include alias values.
+    Returns `dict[patient_id, list[alias]]`, preserving row order per patient.
+    The loader trims whitespace, skips blank rows, and rejects missing columns
+    or empty values with row-number-only errors. It does not infer aliases,
+    validate whether aliases are real names, or perform entity resolution.
     """
 
     aliases_by_patient_id: dict[str, list[str]] = {}
@@ -78,14 +35,10 @@ def load_patient_alias_manifest(
         fieldnames = reader.fieldnames or []
         required_columns = {"patient_id", "alias"}
         missing_columns = sorted(required_columns.difference(fieldnames))
-        # Keep the error generic. Column names are safe, but the exact file
-        # contents are not needed for diagnosis.
         if missing_columns:
             raise ValueError("Alias manifest is missing required columns.")
 
         for row_number, row in enumerate(reader, start=2):
-            # Blank rows are ignored so operators can leave spacing in small
-            # manually edited manifests.
             if _blank_csv_row(row):
                 continue
             patient_id = (row.get("patient_id") or "").strip()
@@ -100,37 +53,17 @@ def load_patient_alias_manifest(
 
 
 def load_custom_regexes_json(
-    path,
+    path,  # JSON path containing project custom regex config.
     *,
-    encoding="utf-8",
+    encoding="utf-8",  # File encoding for the JSON file.
 ) -> dict:
-    """Load and validate ProjectPHI custom-regex JSON.
+    """Load project custom-regex JSON and validate its shape.
 
-    Expected JSON shape:
-        {
-          "synthetic_wb_mrn": {
-            "phi_type": "Synthetic WB MRN",
-            "pattern": "\\\\bWB-\\\\d{7}\\\\b",
-            "replacement": "<SYNTHETIC_MRN>"
-          }
-        }
-
-    The loaded object is returned unchanged after validation. It can be passed
-    directly to `deidentify_csv(..., custom_regexes=...)`.
-
-    Validation:
-        This reuses `_build_pydeid_custom_regexes(...)`, the same production
-        converter used by the de-identification workflow. That validates the
-        config shape and regex syntax, but does not run regex matching over note
-        text.
-
-    Raises:
-        ValueError: If the file is invalid JSON, if the top-level JSON value is
-        not an object, or if the custom-regex config is invalid.
-
-    Security notes:
-        Raw regex patterns may describe local identifier formats. Validation
-        errors should not echo them.
+    The expected shape is the same dictionary accepted by `deidentify_csv(...)`:
+    project rule ID -> `phi_type`, `pattern`, and optional `replacement`.
+    Validation reuses the production custom-regex converter but does not run
+    regex matching over any note text. Raw regex patterns are not included in
+    validation errors.
     """
 
     try:
@@ -143,66 +76,43 @@ def load_custom_regexes_json(
         raise ValueError("Custom regex JSON must contain a top-level object.")
 
     # Reuse the production config validator/converter, then discard pyDeid
-    # objects. This validates shape and regex syntax without scanning notes.
+    # objects. This validates shape without running project regex matching.
     _build_pydeid_custom_regexes(custom_regexes)
     return custom_regexes
 
 
 def load_protected_clinical_terms_csv(
-    path,
+    path,  # CSV path with rule_id,category,term columns.
     *,
-    encoding="utf-8",
+    encoding="utf-8",  # File encoding for the terms CSV.
 ) -> dict:
     """Load protected clinical terms from CSV.
 
-    Expected CSV columns:
-        rule_id,category,term
+    Required columns are `rule_id` and `category`. Rows may provide a whole-span
+    `term`, or a protected `component` plus `within_phrase` for risky eponyms
+    that should only be preserved inside an approved clinical phrase.
 
-    Example:
-        rule_id,category,term
-        birads,breast_imaging,BI-RADS 2
-        birads,breast_imaging,BI-RADS 3
-        pathology,breast_pathology,ductal carcinoma in situ
-
-    Returns:
-        Runtime dictionary accepted by `deidentify_csv(...)`:
-
-        {
-            "birads": {
-                "category": "breast_imaging",
-                "terms": ["BI-RADS 2", "BI-RADS 3"],
-            },
-            "pathology": {
-                "category": "breast_pathology",
-                "terms": ["ductal carcinoma in situ"],
-            },
-        }
-
-    Behavior:
-        - trims surrounding whitespace from `rule_id`, `category`, and `term`;
-        - skips fully blank rows;
-        - preserves term order within each rule;
-        - requires a rule ID to keep the same category across all its rows;
-        - validates duplicate normalized terms through the production protected
-          terms profile builder.
-
-    Raises:
-        ValueError: If required columns are missing, a nonblank row has an empty
-        field, a rule ID changes category, or protected-term validation fails.
-
-    Notes:
-        Protected terms are semantic-preservation vetoes, not PHI detectors.
-        This loader does not scan note text.
+    Returns the runtime dictionary accepted by `deidentify_csv(...)`. Terms are
+    operator-supplied false-positive vetoes, not PHI detectors. The loader
+    keeps rule order, rejects missing/empty fields with sanitized row-number
+    errors, and validates duplicate normalized terms through the production
+    profile builder without printing term lists.
     """
 
     protected_terms: dict[str, dict[str, Any]] = {}
     with open(Path(path), newline="", encoding=encoding) as handle:
         reader = csv.DictReader(handle)
         fieldnames = reader.fieldnames or []
-        required_columns = {"rule_id", "category", "term"}
+        required_columns = {"rule_id", "category"}
         missing_columns = sorted(required_columns.difference(fieldnames))
         if missing_columns:
             raise ValueError("Protected clinical terms CSV is missing required columns.")
+        has_term_column = "term" in fieldnames
+        has_component_columns = {"component", "within_phrase"}.issubset(fieldnames)
+        if not has_term_column and not has_component_columns:
+            raise ValueError(
+                "Protected clinical terms CSV requires term or component columns."
+            )
 
         for row_number, row in enumerate(reader, start=2):
             if _blank_csv_row(row):
@@ -210,6 +120,8 @@ def load_protected_clinical_terms_csv(
             rule_id = (row.get("rule_id") or "").strip()
             category = (row.get("category") or "").strip()
             term = (row.get("term") or "").strip()
+            component = (row.get("component") or "").strip()
+            within_phrase = (row.get("within_phrase") or "").strip()
             if not rule_id:
                 raise ValueError(
                     f"Protected clinical terms CSV row {row_number} has an empty rule_id."
@@ -218,20 +130,33 @@ def load_protected_clinical_terms_csv(
                 raise ValueError(
                     f"Protected clinical terms CSV row {row_number} has an empty category."
                 )
-            if not term:
+            if not term and not (component and within_phrase):
                 raise ValueError(
-                    f"Protected clinical terms CSV row {row_number} has an empty term."
+                    f"Protected clinical terms CSV row {row_number} has no protected value."
+                )
+            if bool(component) != bool(within_phrase):
+                raise ValueError(
+                    f"Protected clinical terms CSV row {row_number} has incomplete component data."
                 )
 
             rule_config = protected_terms.setdefault(
                 rule_id,
-                {"category": category, "terms": []},
+                {"category": category, "terms": [], "component_terms": []},
             )
             if rule_config["category"] != category:
                 raise ValueError(
                     f"Protected clinical terms CSV row {row_number} changes category for rule_id."
                 )
-            rule_config["terms"].append(term)
+            if term:
+                rule_config["terms"].append(term)
+            if component:
+                rule_config["component_terms"].append(
+                    {"component": component, "within_phrase": within_phrase}
+                )
+
+    for rule_config in protected_terms.values():
+        if not rule_config["component_terms"]:
+            del rule_config["component_terms"]
 
     _build_protected_terms_profile(
         protected_terms,
@@ -241,16 +166,7 @@ def load_protected_clinical_terms_csv(
 
 
 def _blank_csv_row(
-    row: dict[str, Any],
+    row: dict[str, Any],  # Parsed CSV row to test for all-empty fields.
 ) -> bool:
-    """Return whether a parsed CSV row is fully blank.
-
-    A row is considered blank when every parsed field is empty after converting
-    `None` to an empty string and trimming whitespace.
-
-    Examples:
-        {"patient_id": "", "alias": ""} -> True
-        {"patient_id": "   ", "alias": None} -> True
-        {"patient_id": "P001", "alias": ""} -> False
-    """
+    """Return true when every parsed CSV field is empty after whitespace trim."""
     return all(not str(value or "").strip() for value in row.values())

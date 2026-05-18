@@ -1,15 +1,4 @@
-"""Protected clinical terminology tests using synthetic examples only.
-
-These tests cover ProjectPHI's protected-term preservation policy:
-
-- protected terms are checked only against pyDeid-emitted spans;
-- exact normalized whole-span matches are preserved;
-- substring matches are not preserved;
-- unknown names still fall back to pyDeid replacement;
-- built-in breast imaging / oncology terms preserve high-value clinical text;
-- protected-term preservation can coexist with stable patient-name replacement,
-  doctor-name replacement, and stable date shifting.
-"""
+"""Protected clinical terminology tests using synthetic examples only."""
 
 from project_phi import PHISpan, deidentify_note
 import project_phi.reconstruction as reconstruction
@@ -17,16 +6,6 @@ from project_phi.protected_terms import _build_protected_terms_profile
 
 
 def _span(text, *, start=4, replacement="Carter"):
-    """Build a synthetic pyDeid-like name span for reconstruction tests.
-
-    The default span pretends pyDeid detected a name-like value and replaced it
-    with `"Carter"`. Tests then check whether protected-term policy preserves
-    the original span text instead.
-
-    Example:
-        `_span("Tomosynthesis")` creates a span whose original text is
-        `"Tomosynthesis"` and whose pyDeid replacement would be `"Carter"`.
-    """
     return PHISpan(
         start=start,
         end=start + len(text),
@@ -44,12 +23,6 @@ def _span(text, *, start=4, replacement="Carter"):
 
 
 def _profile(terms=None):
-    """Build a runtime protected-term profile without built-in terms.
-
-    Example:
-        The default profile protects synthetic breast-imaging terms such as
-        `"tomosynthesis"` and `"mammography with tomosynthesis"`.
-    """
     return _build_protected_terms_profile(
         terms
         or {
@@ -62,8 +35,26 @@ def _profile(terms=None):
     )
 
 
+def _clinical_tool_profile():
+    return _build_protected_terms_profile(
+        {
+            "synthetic_clinical_tools": {
+                "category": "clinical_tools_scales_criteria",
+                "terms": ["JOA score", "Fazekas grade"],
+                "component_terms": [
+                    {
+                        "component": "Chelsea",
+                        "within_phrase": "Chelsea Critical Care Physical Assessment Tool",
+                    },
+                    {"component": "Wieneke", "within_phrase": "Wieneke criteria"},
+                ],
+            }
+        },
+        include_builtin_protected_clinical_terms=False,
+    )
+
+
 def _builtin_profile():
-    """Build a protected-term profile using the curated built-in term set."""
     return _build_protected_terms_profile(
         None,
         include_builtin_protected_clinical_terms=True,
@@ -71,7 +62,6 @@ def _builtin_profile():
 
 
 def test_reconstruction_preserves_exact_protected_clinical_term_span():
-    """An exact protected-term span is preserved with audit metadata."""
     note = "Dr. Tomosynthesis reviewed."
     span = _span("Tomosynthesis")
 
@@ -100,7 +90,6 @@ def test_reconstruction_preserves_exact_protected_clinical_term_span():
 
 
 def test_protected_term_matching_is_case_and_whitespace_normalized():
-    """Protected-term matching ignores case, simple boundary punctuation, and whitespace."""
     note = "Dr.   TOMOSYNTHESIS, reviewed."
     span = _span("  TOMOSYNTHESIS, ", start=3)
 
@@ -119,7 +108,6 @@ def test_protected_term_matching_is_case_and_whitespace_normalized():
 
 
 def test_protected_term_matching_does_not_match_substrings():
-    """Protected terms require exact whole-span matches, not substring matches."""
     note = "Dr. Screening tomosynthesis reviewed."
     span = _span("Screening tomosynthesis")
 
@@ -135,7 +123,6 @@ def test_protected_term_matching_does_not_match_substrings():
 
 
 def test_unknown_name_span_still_uses_pydeid_replacement():
-    """A non-protected unknown name span still falls back to pyDeid replacement."""
     note = "Dr. Xavion reviewed."
     span = _span("Xavion")
 
@@ -151,7 +138,6 @@ def test_unknown_name_span_still_uses_pydeid_replacement():
 
 
 def test_builtin_extensions_preserve_high_value_breast_oncology_terms():
-    """Built-in breast imaging / oncology terms are preserved when exactly matched."""
     examples = [
         ("bilateral digital mammography with tomosynthesis", "breast_imaging_mammography"),
         ("post-lumpectomy changes", "breast_imaging_mammography"),
@@ -186,7 +172,6 @@ def test_builtin_extensions_preserve_high_value_breast_oncology_terms():
 
 
 def test_builtin_extensions_still_require_exact_whole_span_match():
-    """Built-in terms do not preserve larger nonmatching strings."""
     note = "Dr. mammogrammer reviewed."
     span = _span("mammogrammer")
 
@@ -202,7 +187,6 @@ def test_builtin_extensions_still_require_exact_whole_span_match():
 
 
 def test_deidentify_note_preserves_builtin_tomosynthesis_when_pydeid_flags_it():
-    """The public workflow preserves built-in protected terms emitted by pyDeid."""
     note = "Dr. Tomosynthesis reviewed the image."
 
     result = deidentify_note(note)
@@ -219,7 +203,6 @@ def test_deidentify_note_preserves_builtin_tomosynthesis_when_pydeid_flags_it():
 
 
 def test_protected_terms_do_not_block_patient_date_or_doctor_replacement():
-    """Protected-term preservation coexists with name and date replacement policies."""
     note = (
         "Patient Zylanda Qorven saw Dr. Tomosynthesis with Xavion Lorne on "
         "March 14, 2026."
@@ -255,3 +238,84 @@ def test_protected_terms_do_not_block_patient_date_or_doctor_replacement():
         span.metadata.get("replacement_source") == "project_stable_date_shift"
         for span in result.spans
     )
+
+
+def test_protected_component_preserves_tool_name_fragment_only_in_phrase_context():
+    note = "The Chelsea Critical Care Physical Assessment Tool score improved."
+    span = _span("Chelsea", start=4)
+
+    text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        protected_terms_profile=_clinical_tool_profile(),
+    )
+
+    protected_span = spans[0]
+    assert warnings == []
+    assert text == note
+    assert protected_span.action == "preserved"
+    assert protected_span.metadata["replacement_source"] == "project_protected_clinical_term"
+    assert protected_span.metadata["project_protected_term_policy"] == (
+        "exact_normalized_component_within_phrase"
+    )
+    assert protected_span.metadata["project_protected_component"] == "chelsea"
+    assert protected_span.metadata["project_protected_within_phrase"] == (
+        "chelsea critical care physical assessment tool"
+    )
+
+
+def test_protected_component_does_not_preserve_person_like_context():
+    note = "Chelsea attended the oncology visit."
+    span = _span("Chelsea", start=0)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        protected_terms_profile=_clinical_tool_profile(),
+    )
+
+    assert spans[0].action == "replaced"
+    assert spans[0].replacement == "Carter"
+    assert text == "Carter attended the oncology visit."
+
+
+def test_builtin_clinical_tool_terms_include_safe_whole_span_examples():
+    examples = [
+        "ECOG performance status",
+        "Karnofsky Performance Status",
+        "RECIST 1.1",
+        "CTCAE grade",
+        "JOA score",
+        "Fazekas grade",
+        "Chelsea Critical Care Physical Assessment Tool",
+    ]
+
+    for term in examples:
+        note = f"The {term} was documented."
+        span = _span(term, start=4)
+
+        text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            [span],
+            protected_terms_profile=_builtin_profile(),
+        )
+
+        assert warnings == []
+        assert text == note
+        assert spans[0].action == "preserved"
+        assert spans[0].metadata["replacement_source"] == "project_protected_clinical_term"
+
+
+def test_builtin_component_protection_does_not_make_risky_token_global():
+    note = "Chelsea attended the oncology visit."
+    span = _span("Chelsea", start=0)
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        protected_terms_profile=_builtin_profile(),
+    )
+
+    assert spans[0].action == "replaced"
+    assert spans[0].replacement == "Carter"
+    assert text == "Carter attended the oncology visit."
