@@ -34,6 +34,7 @@ Key pages:
   detects, generated deterministically from `patient_id` and a runtime secret.
 - Protected clinical terminology false-positive vetoes for curated pyDeid
   false positives, with built-in general breast/oncology/radiology terms.
+- Title-context action-word vetoes for narrow pyDeid name false positives such as lower-case clinical verbs after `Dr.`.
 - Minimal custom regex pass-through to pyDeid using configured patterns.
 - Optional internal audit CSV output that records span metadata without raw
   detected PHI text.
@@ -160,7 +161,8 @@ final de-identified note_text:
 Test MRN: 1672469. Call 807-792-7136.
 
 synthetic_audit.csv header:
-patient_id,encounter_id,note_id,span_index,start,end,label,source,action,pydeid_types,warning,replacement_source,project_replacement,project_replacement_start,project_replacement_end,pydeid_replacement,pydeid_surrogate_start,pydeid_surrogate_end,project_date_shift_days,project_date_shift_range_days,project_date_shift_policy,project_name_policy,name_role,alias_match_type,custom_regex_rule_id,custom_regex_phi_type,project_protected_term_policy,project_protected_term_rule_id,project_protected_term_category
+patient_id,encounter_id,note_id,span_index,start,end,label,source,action,pydeid_types,warning,replacement_source,project_replacement,project_replacement_start,project_replacement_end,pydeid_replacement,pydeid_surrogate_start,pydeid_surrogate_end,project_date_shift_days,project_date_shift_range_days,project_date_shift_policy,project_name_policy,name_role,alias_match_type,custom_regex_rule_id,custom_regex_phi_type,project_protected_term_policy,project_protected_term_rule_id,project_protected_term_category,project_title_context_policy,project_title_context_trigger,project_
+title_context_word
 ```
 
 The same CSV workflow can be run from the CLI:

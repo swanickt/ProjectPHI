@@ -20,7 +20,8 @@ Replacement priority:
 1. Preserve protected clinical terms when a pyDeid span exactly matches one.
 2. Apply stable date shifting/preservation/fallback when date shifting is enabled.
 3. Apply stable patient-name aliases when name replacement is enabled.
-4. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
+4. Preserve narrow title-context action-word false positives.
+5. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
 
 Examples:
     Original:
@@ -61,6 +62,10 @@ from .date_shift import (
 from .models import PHISpan
 from .patient_names import _name_policy_metadata, _project_patient_name_replacement
 from .protected_terms import _protected_term_match, _protected_term_metadata
+from .title_context import (
+    _title_context_action_word_match,
+    _title_context_action_word_metadata,
+)
 
 
 def _reconstruct_with_stable_dates(
@@ -151,8 +156,9 @@ def _reconstruct_with_project_replacements(
     warnings: list[str] = []
     cursor = 0
     final_offset = 0
+    sorted_spans = sorted(spans, key=lambda item: (item.start, item.end))
 
-    for span in sorted(spans, key=lambda item: (item.start, item.end)):
+    for span in sorted_spans:
         if span.start < cursor:
             # Fail closed. Overlapping spans make it unclear which original text
             # should be copied or replaced; silently continuing could leak PHI.
@@ -164,6 +170,7 @@ def _reconstruct_with_project_replacements(
 
         replacement_info = _project_replacement_for_span(
             span,
+            all_spans=sorted_spans,
             date_shift_offset=date_shift_offset,
             original_text=original_text,
             patient_name_alias_profile=patient_name_alias_profile,
@@ -216,6 +223,7 @@ def _reconstruct_with_project_replacements(
 def _project_replacement_for_span(
     span: PHISpan,
     *,
+    all_spans: list[PHISpan] | None = None,
     date_shift_offset: int | None = None,
     original_text: str = "",
     patient_name_alias_profile: dict[str, Any] | None = None,
@@ -237,13 +245,18 @@ def _project_replacement_for_span(
 
     3. Stable patient-name policy:
        replace explicit patient aliases with the deterministic fake patient
-       identity. Unknown names stay with pyDeid's replacement.
+       identity.
 
-    4. pyDeid fallback:
+    4. Title-context action-word veto:
+       preserve lower-case clinical action words that pyDeid emitted as
+       title-derived name spans in narrow `Dr.` contexts.
+
+    5. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
 
     Args:
         span: Current normalized pyDeid span.
+        all_spans: Full normalized pyDeid span list for title-context checks.
         date_shift_offset: Optional patient-specific day offset. Date policy is
             enabled only when this is not `None`.
         original_text: Full original note text, used for split patient-alias
@@ -262,6 +275,9 @@ def _project_replacement_for_span(
           "shifted_natural_language_full_date", {})`
         - known patient alias: `("Alex Bennett", "project_stable_patient_name",
           "full", {})`
+        - title-context action word: `("reviewed",
+          "project_title_context_action_word_veto",
+          "title_context_action_word_exact_match", {...})`
         - unknown name: `("[**Name**]", "pyDeid", "unknown_name_pydeid", {})`
 
     Notes:
@@ -320,6 +336,22 @@ def _project_replacement_for_span(
         if name_replacement is not None:
             replacement_text, match_type = name_replacement
             return replacement_text, "project_stable_patient_name", match_type, {}
+
+    title_context_match = _title_context_action_word_match(
+        span,
+        original_text=original_text,
+        spans=all_spans or [],
+        patient_name_alias_profile=patient_name_alias_profile,
+    )
+    if title_context_match is not None:
+        return (
+            span.text,
+            "project_title_context_action_word_veto",
+            "title_context_action_word_exact_match",
+            _title_context_action_word_metadata(title_context_match),
+        )
+
+    if patient_name_alias_profile is not None and patient_name_identity is not None and span.label == "NAME":
         return span.replacement or "<PHI>", "pyDeid", "unknown_name_pydeid", {}
 
     # Final fallback for all other spans.

@@ -55,6 +55,9 @@ from .models import PHISpan
 # - project_protected_term_policy: Protected-term handling policy applied to this span.
 # - project_protected_term_rule_id: Protected-term rule ID associated with this span.
 # - project_protected_term_category: Protected-term category associated with this span.
+# - project_title_context_policy: Title-context false-positive policy applied to this span.
+# - project_title_context_trigger: Title pattern that made the action-word veto eligible.
+# - project_title_context_word: Normalized action word preserved by the veto.
 #
 # Audit rows intentionally omit PHISpan.text and original note text.
 AUDIT_COLUMNS = [
@@ -87,6 +90,9 @@ AUDIT_COLUMNS = [
     "project_protected_term_policy",
     "project_protected_term_rule_id",
     "project_protected_term_category",
+    "project_title_context_policy",
+    "project_title_context_trigger",
+    "project_title_context_word",
 ]
 
 
@@ -142,6 +148,9 @@ def _span_to_audit_row(
         "project_protected_term_policy": span.metadata.get("project_protected_term_policy"),
         "project_protected_term_rule_id": span.metadata.get("project_protected_term_rule_id"),
         "project_protected_term_category": span.metadata.get("project_protected_term_category"),
+        "project_title_context_policy": span.metadata.get("project_title_context_policy"),
+        "project_title_context_trigger": span.metadata.get("project_title_context_trigger"),
+        "project_title_context_word": span.metadata.get("project_title_context_word"),
     }
 
 
@@ -196,6 +205,9 @@ def _write_warning_audit_row(
             "project_protected_term_policy": "",
             "project_protected_term_rule_id": "",
             "project_protected_term_category": "",
+            "project_title_context_policy": "",
+            "project_title_context_trigger": "",
+            "project_title_context_word": "",
         }
     )
 

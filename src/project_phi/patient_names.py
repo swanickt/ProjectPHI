@@ -1,32 +1,7 @@
 """Stable patient-name surrogate helpers for explicit pyDeid-detected aliases.
 
-These helpers support deterministic fake patient-name replacement, but only for
-names that are explicitly configured as aliases for the current patient.
-
-They do not detect names themselves. pyDeid remains responsible for name
-detection and pruning. ProjectPHI only decides whether a pyDeid-detected name
-span matches the caller-provided patient alias profile.
-
-Policy summary:
-- explicit patient aliases can receive one stable fake identity per patient;
-- unknown names keep pyDeid's replacement and are marked as unknown names;
-- single-token aliases are handled conservatively to avoid overclaiming an
-  unrelated clinician, family member, or other person as the patient;
-- titles such as `Mr` / `Mme` are preserved while the family name is replaced.
-
-Examples:
-    Given patient aliases `["Jane Smith", "Ms Smith", "Jane"]` and a generated
-    fake identity `Alex Bennett`:
-
-    - `Jane Smith` -> `Alex Bennett` with alias_match_type `full`
-    - `Jane` -> `Alex` with alias_match_type `given`
-    - `Ms Smith` -> `Ms Bennett` with alias_match_type `title_family`
-    - `Smith` -> `Bennett` only when policy has enough context to treat it as
-      the patient family name
-    - an unrelated detected name such as `Dr Brown` -> pyDeid replacement only
-
-- Faker is seeded from a patient/secret HMAC digest for deterministic output;
-- the fallback name pools are emergency-only and much smaller than Faker's pool.
+The policy is intentionally conservative: explicit patient aliases can receive
+a stable fake identity, while unknown names remain pyDeid-only replacements.
 """
 
 from __future__ import annotations
@@ -70,40 +45,13 @@ _NAME_TITLES = {"mr", "mrs", "ms", "miss", "mx", "m", "mme", "mlle"}
 
 
 def _resolve_patient_name_secret(
-    patient_name_secret: str | bytes | None,
-    patient_name_secret_env_var: str | None,
+    patient_name_secret: str | bytes | None,  # Direct secret value for HMAC.
+    patient_name_secret_env_var: str | None,  # Env var name containing the secret.
 ) -> bytes:
-    """Resolve the HMAC secret used for stable patient-name surrogates.
+    """Resolve the patient-name surrogate secret from value or environment.
 
-    The secret can be supplied directly or through an environment variable.
-    Direct values are useful for tests; environment variables are preferred for
-    real runtime configuration.
-
-    Examples:
-        Direct string secret:
-            _resolve_patient_name_secret("dev-secret", None)
-
-        Direct bytes secret:
-            _resolve_patient_name_secret(b"dev-secret", None)
-
-        Environment-backed secret:
-            os.environ["PROJECTPHI_PATIENT_NAME_SECRET"] = "runtime-secret"
-            _resolve_patient_name_secret(None, "PROJECTPHI_PATIENT_NAME_SECRET")
-
-    Args:
-        patient_name_secret: Direct secret value. Strings are encoded as UTF-8.
-        patient_name_secret_env_var: Name of the environment variable containing
-            the secret. Used only when `patient_name_secret` is not provided.
-
-    Returns:
-        Secret bytes suitable for HMAC.
-
-    Raises:
-        ValueError: If neither source provides a nonempty secret.
-
-    Notes:
-        The secret is never stored in result metadata, span metadata, audit rows,
-        warnings, or returned values.
+    The secret is returned as bytes for HMAC use and is not stored in result
+    metadata, span metadata, audit output, or warnings.
     """
     if patient_name_secret is not None:
         if isinstance(patient_name_secret, bytes):
@@ -126,44 +74,16 @@ def _resolve_patient_name_secret(
 
 def _stable_patient_name_identity(
     *,
-    patient_id: str | None,
-    secret: bytes,
+    patient_id: str | None,  # Stable patient key for deterministic fake identity.
+    secret: bytes,  # HMAC key bytes.
 ) -> dict[str, str]:
-    """Generate one deterministic fake identity for a patient.
+    """Generate one deterministic fake identity for the patient key.
 
-    The identity is derived from `HMAC-SHA256(secret, "patient-name|{patient_id}")`.
-    Faker is seeded from the digest so the same `(patient_id, secret)` pair
-    produces the same fake name across notes and runs.
-
-    Examples:
-        Returned shape:
-            {
-                "given": "Alex",
-                "family": "Bennett",
-                "full": "Alex Bennett",
-            }
-
-        If the original aliases are `["Jane Smith", "Ms Smith"]`, this identity
-        can later be used as:
-            - `Jane Smith` -> `Alex Bennett`
-            - `Jane` -> `Alex`
-            - `Smith` -> `Bennett`
-            - `Ms Smith` -> `Ms Bennett`
-
-    Args:
-        patient_id: Stable patient key used for deterministic fake identity
-            generation.
-        secret: HMAC key bytes.
-
-    Returns:
-        Dictionary containing `given`, `family`, and `full` fake-name components.
-
-    Raises:
-        ValueError: If `patient_id` is empty.
-
-    Notes:
-        The raw HMAC digest is never returned. Faker is preferred over the small
-        in-source fallback pools.
+    Returns a small dictionary with `given`, `family`, and `full` components.
+    The raw HMAC digest is never returned. Faker is seeded from the HMAC digest
+    so the identity is stable across notes without exposing reversible material.
+    Tiny in-source name pools remain only as a fallback if Faker is unavailable
+    or cannot produce usable components in the current environment.
     """
 
     if not patient_id:
@@ -184,22 +104,16 @@ def _stable_patient_name_identity(
 
 
 def _stable_patient_name_identity_from_faker(
-    digest: bytes,
+    digest: bytes,  # Patient/secret HMAC digest used only to seed Faker.
 ) -> dict[str, str] | None:
-    """Generate deterministic Faker name components from an HMAC digest.
+    """Return deterministic Faker name components, or `None` for fallback pools.
 
-    Faker is seeded per instance, not globally, so this helper does not disturb
-    Faker use elsewhere in the process. It also intentionally does not infer or
-    preserve gender from aliases, notes, diagnoses, or pronouns.
-
-    Args:
-        digest: Patient/secret HMAC digest used only as deterministic seed
-            material.
-
-    Returns:
-        Fake `given`, `family`, and `full` components, or `None` if Faker is
-        unavailable or cannot produce usable names.
+    The Faker dependency is provided transitively by pyDeid in supported
+    environments. This helper avoids global Faker seeding and intentionally
+    does not infer or preserve gender from aliases, notes, diagnoses, or
+    pronouns.
     """
+
     try:
         from faker import Faker
     except ImportError:
@@ -224,53 +138,15 @@ def _stable_patient_name_identity_from_faker(
 
 
 def _build_patient_alias_profile(
-    patient_aliases: Iterable[str] | None,
+    patient_aliases: Iterable[str] | None,  # Explicit patient aliases for one patient.
 ) -> dict[str, Any]:
     """Normalize explicit patient aliases into conservative matching sets.
 
-    This helper builds the profile used to decide whether a pyDeid-detected name
-    span is a known alias for the current patient. It does not infer names from
-    note text and does not scan the note.
-
-    Input examples:
-        Full alias:
-            `Jane Smith`
-            - full alias: `jane smith`
-            - given name: `jane`
-            - family name from full alias: `smith`
-            - pyDeid custom first name: `Jane`
-            - pyDeid custom last name: `Smith`
-
-        Title-family alias:
-            `Ms Smith`
-            - title-family alias: `ms smith`
-            - title: `ms`
-            - explicit family name: `smith`
-            - pyDeid custom last name: `Smith`
-
-        Single-token alias:
-            `Jane`
-            - treated as a given name unless other explicit context makes it a
-              known family name
-            - added to pyDeid custom first names
-
-    Conservative behavior:
-        A single-token alias is treated as a family name only when that family
-        name is also supported by a full alias or title-family alias. This avoids
-        treating an unrelated clinician/family name as the patient.
-
-    Args:
-        patient_aliases: Explicit aliases for one patient. These should come
-            from trusted row metadata/configuration, not from automatic note
-            inference.
-
-    Returns:
-        A profile containing normalized alias sets and pyDeid custom name-list
-        tokens.
-
-    Raises:
-        ValueError: If no usable aliases are supplied, or if a single-token alias
-            is ambiguous between given-name and family-name roles.
+    This helper does not infer aliases from note text. Full aliases can derive
+    given/family components for that patient; title-family aliases preserve the
+    title and replace only the family name. Single-token aliases are handled
+    cautiously to avoid treating an unrelated clinician/family name as the
+    patient.
     """
     aliases = [alias for alias in (patient_aliases or []) if _normalize_alias(alias)]
     if not aliases:
@@ -309,9 +185,8 @@ def _build_patient_alias_profile(
     full_family_names = set(profile["family_names_from_full"])
     title_family_names = set(profile["family_names_explicit"])
     for token in single_token_aliases:
-        # Single-token aliases are intentionally conservative. A token is only
-        # treated as a family name when a full alias or title-family alias
-        # already establishes that family-name role.
+        # Single-token aliases are intentionally conservative: a token is only
+        # treated as a family name when explicit full/title-family context exists.
         if token in full_family_names:
             profile["family_names_explicit"].add(token)
             profile["custom_last_names"].add(_alias_token_for_pydeid(token))
@@ -336,27 +211,11 @@ def _build_patient_alias_profile(
 
 
 def _merge_patient_alias_custom_names(
-    alias_profile: dict[str, Any],
-    custom_patient_first_names: set[str] | None,
-    custom_patient_last_names: set[str] | None,
+    alias_profile: dict[str, Any],  # Normalized explicit-alias profile.
+    custom_patient_first_names: set[str] | None,  # Caller-provided pyDeid first names.
+    custom_patient_last_names: set[str] | None,  # Caller-provided pyDeid last names.
 ) -> tuple[set[str], set[str]]:
-    """Merge alias-derived tokens into pyDeid custom patient name lists.
-
-    Alias-derived custom names help pyDeid detect configured patient aliases.
-    They do not by themselves trigger ProjectPHI replacement. Stable patient-name
-    replacement still happens later only when a pyDeid span matches the explicit
-    alias profile.
-
-    Args:
-        alias_profile: Profile returned by `_build_patient_alias_profile`.
-        custom_patient_first_names: Caller-provided pyDeid patient first-name
-            tokens, if any.
-        custom_patient_last_names: Caller-provided pyDeid patient last-name
-            tokens, if any.
-
-    Returns:
-        `(first_names, last_names)` sets to pass to pyDeid.
-    """
+    """Merge alias-derived tokens into pyDeid custom patient name lists."""
     first_names = set(custom_patient_first_names or set())
     last_names = set(custom_patient_last_names or set())
     # Alias-derived name lists improve pyDeid detection. Replacement still only
@@ -367,39 +226,17 @@ def _merge_patient_alias_custom_names(
 
 
 def _project_patient_name_replacement(
-    span: PHISpan,
+    span: PHISpan,  # pyDeid-detected name span.
     *,
-    original_text: str,
-    alias_profile: dict[str, Any],
-    identity: dict[str, str],
+    original_text: str,  # Full original note for split-alias context checks.
+    alias_profile: dict[str, Any],  # Explicit patient alias matching profile.
+    identity: dict[str, str],  # Deterministic fake patient name components.
 ) -> tuple[str, str] | None:
-    """Return a stable patient-name replacement for a matching pyDeid span.
+    """Return a stable patient-name replacement for a matching pyDeid name span.
 
-    Only pyDeid-detected spans that match explicit patient-alias policy receive
-    the stable fake identity. Unknown names return `None`, allowing
-    reconstruction to keep pyDeid's replacement and mark the span as unknown.
-
-    Examples:
-        With alias profile from `["Jane Smith", "Ms Smith", "Jane"]` and fake
-        identity `{"given": "Alex", "family": "Bennett", "full": "Alex Bennett"}`:
-
-        - span text `Jane Smith` returns `("Alex Bennett", "full")`
-        - span text `Jane` returns `("Alex", "given")`
-        - span text `Ms Smith` returns `("Ms Bennett", "title_family")`
-        - span text `Smith` may return `("Bennett", "family")` when the span is
-          inside a configured full alias in the original note
-        - span text `Dr Brown` returns `None`
-
-    Args:
-        span: pyDeid-detected name span.
-        original_text: Full original note, used only for split-alias context
-            checks.
-        alias_profile: Explicit patient alias matching profile.
-        identity: Deterministic fake patient name components.
-
-    Returns:
-        `(replacement, alias_match_type)` for known patient aliases, or `None`
-        for unknown names.
+    Only pyDeid-detected spans that match explicit alias policy receive the
+    stable patient identity. Unknown names return `None` so reconstruction can
+    keep pyDeid's replacement and mark the span as an unknown name.
     """
     normalized = _normalize_alias(span.text)
     if not normalized:
@@ -422,32 +259,11 @@ def _project_patient_name_replacement(
 
 
 def _span_is_inside_full_alias(
-    original_text: str,
-    span: PHISpan,
-    full_alias_texts: Iterable[str],
+    original_text: str,  # Full original note text.
+    span: PHISpan,  # Split name component span to check.
+    full_alias_texts: Iterable[str],  # Explicit full aliases for context.
 ) -> bool:
-    """Return whether a split name span falls inside an explicit full alias.
-
-    pyDeid may split a full name into separate given/family spans. This helper
-    allows a family-name span to be treated as a patient alias only when its
-    original offsets fall within one of the configured full aliases.
-
-    Example:
-        Original text:
-            `Patient Jane Smith was seen by Dr Smith.`
-
-        If `Jane Smith` is a configured full alias:
-            - the `Smith` span inside `Jane Smith` returns True;
-            - the `Smith` span inside `Dr Smith` returns False.
-
-    Args:
-        original_text: Full original note text.
-        span: Split pyDeid name-component span to check.
-        full_alias_texts: Normalized full aliases from the patient alias profile.
-
-    Returns:
-        True if the span offsets fall inside a configured full alias occurrence.
-    """
+    """Return true when a split pyDeid span falls inside an explicit full alias."""
     lowered = original_text.lower()
     for alias_text in full_alias_texts:
         start = lowered.find(alias_text)
@@ -460,43 +276,21 @@ def _span_is_inside_full_alias(
 
 
 def _name_policy_metadata(
-    replacement_source: str,
-    policy: str,
+    replacement_source: str,  # Source selected for final replacement.
+    policy: str,  # Alias match type or unknown-name policy.
 ) -> dict[str, str]:
-    """Return audit metadata for known patient aliases or unknown names.
-
-    Args:
-        replacement_source: Source selected for final replacement. The known
-            patient-alias path uses `project_stable_patient_name`.
-        policy: Alias match type returned by `_project_patient_name_replacement`,
-            such as `full`, `given`, `family`, or `title_family`.
-
-    Returns:
-        Metadata fields used by audit output:
-        - `project_name_policy`
-        - `name_role`
-        - `alias_match_type`
-
-    Examples:
-        Known patient alias:
-            {
-                "project_name_policy": "known_patient_alias",
-                "name_role": "known_patient_alias",
-                "alias_match_type": "full",
-            }
-
-        Unknown name:
-            {
-                "project_name_policy": "unknown_name_pydeid",
-                "name_role": "unknown_name",
-                "alias_match_type": "",
-            }
-    """
+    """Return audit metadata for known patient aliases or unknown names."""
     if replacement_source == "project_stable_patient_name":
         return {
             "project_name_policy": "known_patient_alias",
             "name_role": "known_patient_alias",
             "alias_match_type": policy,
+        }
+    if replacement_source == "project_title_context_action_word_veto":
+        return {
+            "project_name_policy": "title_context_action_word_veto",
+            "name_role": "not_name_action_word",
+            "alias_match_type": "",
         }
     # Unknown names may be clinicians, family, or others. They stay pyDeid-only
     # rather than being overclaimed as patient aliases.
@@ -510,47 +304,19 @@ def _name_policy_metadata(
 def _normalize_alias(
     alias: str,  # Raw alias or span text to normalize.
 ) -> str:
-    """Normalize alias or span text for conservative matching.
-
-    Normalization:
-    - removes periods;
-    - casefolds;
-    - trims leading/trailing whitespace;
-    - collapses repeated whitespace.
-
-    Examples:
-        - `"Jane Smith"` -> `"jane smith"`
-        - `"Ms. Smith"` -> `"ms smith"`
-        - `"  JANE   SMITH  "` -> `"jane smith"`
-    """
+    """Casefold, trim, remove periods, and collapse whitespace for alias matching."""
     return " ".join(str(alias).replace(".", "").casefold().split())
 
 
 def _alias_token_for_pydeid(
     token: str,  # One normalized alias component.
 ) -> str:
-    """Format one normalized alias token for pyDeid custom name lists.
-
-    Examples:
-        - `"jane"` -> `"Jane"`
-        - `"smith"` -> `"Smith"`
-
-    This helper assumes the token has already been normalized by
-    `_normalize_alias`.
-    """
+    """Format one alias component for pyDeid custom name-list matching."""
     return token[:1].upper() + token[1:]
 
 
 def _requested_types_include_names(
-    requested_types: Iterable[str],
+    requested_types: Iterable[str],  # Caller-requested pyDeid type names.
 ) -> bool:
-    """Return whether caller-requested pyDeid types include name detection.
-
-    Examples:
-        - `["names", "dates"]` -> True
-        - `["contact", "dates"]` -> False
-        - `["Names"]` -> True
-
-    This checks for pyDeid's plural `"names"` category name.
-    """
+    """Return true when caller-requested pyDeid types include name detection."""
     return any(str(requested_type).lower() == "names" for requested_type in requested_types)
