@@ -123,7 +123,7 @@ uses directly:
 
 The local pyDeid `deid_string(...)` also accepts date-year threshold options
 such as `two_digit_threshold`, `valid_year_low`, and `valid_year_high`.
-ProjectPHI currently leaves those at pyDeid defaults. 
+ProjectPHI currently leaves those at pyDeid defaults.
 
 ## Stable Date Shifting
 
@@ -528,34 +528,3 @@ outputs.
 For detailed synthetic input/output examples covering single-note behavior,
 CSV row failures, stable replacement, protected terms, and custom regexes, see
 [Examples](09_examples.md).
-
-## Installation Notes
-
-ProjectPHI's recommended local setup uses `uv`. Install `uv` first if it is
-not already available:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Then create a Python 3.11 environment and install the project editable with its
-development test dependency:
-
-```bash
-uv venv .venv --python 3.11
-source .venv/bin/activate
-uv sync --extra dev
-```
-
-The `pyproject.toml` dependency list pins pyDeid to a specific GitHub commit,
-and `uv.lock` records the resolved package set. The dependency list includes
-compatibility constraints for pyDeid's current dependency stack:
-
-- `setuptools<81`, because pyDeid imports `pkg_resources`;
-- `numpy<2`, because pyDeid's spaCy/thinc stack is not compatible with newer
-  NumPy releases in the tested environment.
-
-The first install needs internet access for GitHub and the configured package
-index. Returning to an already-created `.venv` does not need internet for
-normal local execution.
-
