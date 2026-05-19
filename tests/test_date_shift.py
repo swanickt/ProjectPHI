@@ -316,6 +316,88 @@ def test_stable_date_shift_preserves_visual_acuity_fraction_in_date_span():
     assert warnings == []
     assert final_spans[0].metadata["project_date_shift_policy"] == "preserved_score_or_fraction"
 
+def test_stable_date_shift_preserves_apgar_slash_score_in_date_span():
+    note = "Apgar scores were 4/7/10 at 1, 5 and 10 min after delivery."
+    start = note.index("4/7/10")
+    span = PHISpan(
+        start=start,
+        end=start + len("4/7/10"),
+        text="4/7/10",
+        label="DATE",
+        source="pyDeid",
+        replacement="0010-04-07",
+        pydeid_types=["Year/Month/Day [yy(yy)/mm/dd]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "4", "day": "7", "year": "10"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=30,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    assert final_spans[0].action == "preserved"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "preserved_score_or_fraction"
+    assert (
+        final_spans[0].metadata["project_date_shift_preservation_reason"]
+        == "score_or_fraction_context"
+    )
+
+def test_stable_date_shift_still_shifts_three_part_slash_date_without_apgar_context():
+    note = "Follow-up occurred on 4/7/2010."
+    start = note.index("4/7/2010")
+    span = PHISpan(
+        start=start,
+        end=start + len("4/7/2010"),
+        text="4/7/2010",
+        label="DATE",
+        source="pyDeid",
+        replacement="2010-04-07",
+        pydeid_types=["Month/Day/Year [mm/dd/yy(yy)]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "4", "day": "7", "year": "2010"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=30,
+        date_shift_days=45,
+    )
+
+    assert "4/7/2010" not in deidentified_text
+    assert final_spans[0].replacement == "2010-05-07"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_full_date"
+    assert warnings == []
+
+def test_stable_date_shift_still_shifts_three_part_slash_date_near_apgar_without_timing_context():
+    note = "Apgar scores were recorded. Follow-up occurred on 4/7/2010."
+    start = note.index("4/7/2010")
+    span = PHISpan(
+        start=start,
+        end=start + len("4/7/2010"),
+        text="4/7/2010",
+        label="DATE",
+        source="pyDeid",
+        replacement="2010-04-07",
+        pydeid_types=["Month/Day/Year [mm/dd/yy(yy)]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "4", "day": "7", "year": "2010"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=-7,
+        date_shift_days=45,
+    )
+
+    assert "4/7/2010" not in deidentified_text
+    assert final_spans[0].replacement == "2010-03-31"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_full_date"
+    assert warnings == []
+
 def test_stable_date_shift_still_shifts_slash_month_year_without_fraction_context():
     note = "Follow-up occurred in 10/2021."
     start = note.index("10/2021")

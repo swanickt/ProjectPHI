@@ -88,16 +88,19 @@ _ORDINARY_ARTICLE_PRONOUN_TOKENS = {
 _INITIAL_CONTEXT_PREFIXES = (
     "case",
     "control",
-    "dr",
     "doctor",
     "family",
-    "mr",
-    "mrs",
-    "ms",
     "patient",
     "participant",
     "subject",
 )
+
+_TITLE_INITIAL_CONTEXT_PREFIXES = {
+    "Dr.",
+    "Mr.",
+    "Mrs.",
+    "Ms.",
+}
 
 _NH_CONTEXT_AFTER = (
     " resident",
@@ -536,6 +539,8 @@ def _looks_like_initial_or_case_label_context(
 
     if previous_word in _INITIAL_CONTEXT_PREFIXES:
         return True
+    if _previous_token_is_title_prefix(before):
+        return True
     if after.startswith(".") or after.startswith(" ."):
         return True
     if after.startswith("-"):
@@ -543,6 +548,14 @@ def _looks_like_initial_or_case_label_context(
     if len(span.text) == 1 and after[:1].isupper():
         return True
     return False
+
+
+def _previous_token_is_title_prefix(text_before: str) -> bool:
+    """Return true for title-cased prefixes without treating `MR.` as `Mr.`."""
+    tokens = text_before.split()
+    if not tokens:
+        return False
+    return tokens[-1] in _TITLE_INITIAL_CONTEXT_PREFIXES
 
 
 def _has_nursing_home_context(

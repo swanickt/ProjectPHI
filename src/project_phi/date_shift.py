@@ -66,6 +66,12 @@ _NATURAL_LANGUAGE_MONTH_YEAR_RE = re.compile(
     re.IGNORECASE,
 )
 _SLASH_SCORE_OR_FRACTION_RE = re.compile(r"^\s*\d{1,2}/\d{1,3}\s*$")
+_SLASH_APGAR_SCORE_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{1,2}\s*$")
+_APGAR_TIMING_RE = re.compile(
+    r"(?:at|@)\s*(?:1|one)\s*(?:,|\band\b|/)\s*(?:5|five)"
+    r"(?:\s*(?:,|\band\b|/)\s*(?:10|ten))?\s*(?:min|mins|minute|minutes)\b",
+    re.IGNORECASE,
+)
 _MONTH_YEAR_ANCHOR_DAY = 15
 
 _SCORE_OR_FRACTION_CONTEXT_TERMS = {
@@ -322,6 +328,8 @@ def _is_score_or_fraction_date_span(
     """
     if not _is_date_like_span(span):
         return False
+    if _is_apgar_slash_score_span(span, original_text):
+        return True
     if not _SLASH_SCORE_OR_FRACTION_RE.match(span.text):
         return False
 
@@ -333,6 +341,22 @@ def _is_score_or_fraction_date_span(
         | _VISUAL_ACUITY_CONTEXT_TERMS
     )
     return any(term in context for term in context_terms)
+
+
+def _is_apgar_slash_score_span(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true for bounded Apgar score notation such as `4/7/10`.
+
+    Three-part slash text is also a possible date shape, so this guard requires
+    both nearby Apgar wording and the usual 1/5/10-minute timing context.
+    """
+    if not _SLASH_APGAR_SCORE_RE.match(span.text):
+        return False
+    before = original_text[max(0, span.start - 48) : span.start]
+    after = original_text[span.end : min(len(original_text), span.end + 72)]
+    return "apgar" in before.casefold() and _APGAR_TIMING_RE.search(after) is not None
 
 
 def _score_or_fraction_date_metadata() -> dict[str, str]:

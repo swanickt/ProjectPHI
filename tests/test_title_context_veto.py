@@ -77,6 +77,22 @@ def test_reconstruction_preserves_pronoun_name_false_positives():
         assert spans[0].metadata["replacement_source"] == "project_ordinary_token_veto"
 
 
+def test_reconstruction_preserves_pronoun_after_uppercase_clinical_abbreviation():
+    examples = [
+        ("Noted to have mild MR. He was sent home.", "He"),
+        ("Noted to have mild MR. Her family called.", "Her"),
+    ]
+
+    for note, token in examples:
+        span = _name_span(token, note.index(token), replacement="Carter", pydeid_types=["Name (NI)"])
+
+        text, spans, warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+        assert text == note
+        assert warnings == []
+        assert spans[0].metadata["replacement_source"] == "project_ordinary_token_veto"
+
+
 def test_reconstruction_preserves_nh_only_in_nursing_home_context():
     note = "A 87 year old female NH resident presented with abdominal pain."
     span = _name_span("NH", note.index("NH"), replacement="Donna", pydeid_types=["Name8 (MD)"])
@@ -99,6 +115,8 @@ def test_reconstruction_does_not_preserve_article_in_initial_contexts():
         ("Case A was excluded.", "A"),
         ("Mr. A called.", "A"),
         ("Ms. A called.", "A"),
+        ("Dr. A reviewed the note.", "A"),
+        ("Mr. He was sent home.", "He"),
     ]
 
     for note, token in examples:
