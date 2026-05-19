@@ -66,6 +66,11 @@ from .models import PHISpan
 # - project_ordinary_token_policy: Ordinary-token false-positive policy applied to this span.
 # - project_ordinary_token: Short token preserved by the ordinary-token veto.
 # - project_ordinary_token_category: Token category, such as pronoun_or_article.
+# - project_clinical_abbreviation_policy: Abbreviation false-positive policy applied.
+# - project_clinical_abbreviation: Clinical abbreviation preserved by the policy.
+# - project_clinical_abbreviation_context: Context family that allowed preservation.
+# - project_obstetric_history_policy: Obstetric shorthand preservation policy.
+# - project_obstetric_history_pattern: Obstetric shorthand pattern family.
 #
 # Audit rows intentionally omit PHISpan.text and original note text.
 AUDIT_COLUMNS = [
@@ -109,6 +114,11 @@ AUDIT_COLUMNS = [
     "project_ordinary_token_policy",
     "project_ordinary_token",
     "project_ordinary_token_category",
+    "project_clinical_abbreviation_policy",
+    "project_clinical_abbreviation",
+    "project_clinical_abbreviation_context",
+    "project_obstetric_history_policy",
+    "project_obstetric_history_pattern",
 ]
 
 
@@ -175,6 +185,15 @@ def _span_to_audit_row(
         "project_ordinary_token_policy": span.metadata.get("project_ordinary_token_policy"),
         "project_ordinary_token": span.metadata.get("project_ordinary_token"),
         "project_ordinary_token_category": span.metadata.get("project_ordinary_token_category"),
+        "project_clinical_abbreviation_policy": span.metadata.get(
+            "project_clinical_abbreviation_policy"
+        ),
+        "project_clinical_abbreviation": span.metadata.get("project_clinical_abbreviation"),
+        "project_clinical_abbreviation_context": span.metadata.get(
+            "project_clinical_abbreviation_context"
+        ),
+        "project_obstetric_history_policy": span.metadata.get("project_obstetric_history_policy"),
+        "project_obstetric_history_pattern": span.metadata.get("project_obstetric_history_pattern"),
     }
 
 
@@ -240,6 +259,11 @@ def _write_warning_audit_row(
             "project_ordinary_token_policy": "",
             "project_ordinary_token": "",
             "project_ordinary_token_category": "",
+            "project_clinical_abbreviation_policy": "",
+            "project_clinical_abbreviation": "",
+            "project_clinical_abbreviation_context": "",
+            "project_obstetric_history_policy": "",
+            "project_obstetric_history_pattern": "",
         }
     )
 

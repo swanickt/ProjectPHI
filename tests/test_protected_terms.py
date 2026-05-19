@@ -284,10 +284,27 @@ def test_builtin_clinical_tool_terms_include_safe_whole_span_examples():
         "ECOG performance status",
         "Karnofsky Performance Status",
         "RECIST 1.1",
+        "iRECIST",
         "CTCAE grade",
+        "NIA-AA criteria",
         "JOA score",
         "Fazekas grade",
+        "Oldenburg Sentence Test",
         "Chelsea Critical Care Physical Assessment Tool",
+        "Paddick gradient index",
+        "dose-volume histogram",
+        "Merkel cell carcinoma",
+        "myasthenia gravis",
+        "de novo",
+        "et al.",
+        "in situ",
+        "ex vivo",
+        "in silico",
+        "status post",
+        "whole exome sequencing",
+        "Replogle tube",
+        "von Hippel-Lindau syndrome",
+        "Li-Fraumeni syndrome",
     ]
 
     for term in examples:
@@ -319,3 +336,71 @@ def test_builtin_component_protection_does_not_make_risky_token_global():
     assert spans[0].action == "replaced"
     assert spans[0].replacement == "Carter"
     assert text == "Carter attended the oncology visit."
+
+
+def test_builtin_component_extensions_preserve_observed_tool_fragments_in_phrase_context():
+    examples = [
+        ("The Wieneke index score was zero.", "Wieneke"),
+        ("The Fazekas scale score was mild.", "Fazekas"),
+        ("The Oldenburg Sentence Test was repeated.", "Oldenburg"),
+        ("A Replogle tube was placed.", "Replogle"),
+        ("The diagnosis was Merkel cell carcinoma.", "Merkel"),
+        ("Symptoms reflected myasthenia gravis.", "gravis"),
+        ("The Paddick gradient index was reported.", "Paddick"),
+        ("This was de novo metastatic melanoma.", "novo"),
+        ("This was de novo metastatic melanoma.", "de"),
+        ("The authors et al. reported toxicity.", "al"),
+        ("Tumor was carcinoma in situ.", "situ"),
+        ("Cells were studied ex vivo.", "ex"),
+        ("Cells were studied ex vivo.", "vivo"),
+        ("Support used veno-venous ECMO.", "veno"),
+        ("The syndrome was von Hippel-Lindau disease.", "von"),
+        ("The syndrome was Li-Fraumeni syndrome.", "Li"),
+    ]
+
+    for note, token in examples:
+        start = note.index(token)
+        span = _span(token, start=start)
+
+        text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            [span],
+            protected_terms_profile=_builtin_profile(),
+        )
+
+        assert warnings == []
+        assert text == note
+        assert spans[0].action == "preserved"
+        assert spans[0].metadata["replacement_source"] == "project_protected_clinical_term"
+        assert spans[0].metadata["project_protected_term_policy"] == (
+            "exact_normalized_component_within_phrase"
+        )
+
+
+def test_builtin_component_extensions_do_not_preserve_risky_tokens_globally():
+    examples = [
+        ("Wieneke attended the visit.", "Wieneke"),
+        ("Fazekas called the clinic.", "Fazekas"),
+        ("Oldenburg clinic called.", "Oldenburg"),
+        ("Replogle signed the form.", "Replogle"),
+        ("Merkel attended the visit.", "Merkel"),
+        ("Novo attended the visit.", "Novo"),
+        ("De attended the visit.", "De"),
+        ("Al attended the visit.", "Al"),
+        ("Von attended the visit.", "Von"),
+        ("Paddick attended the visit.", "Paddick"),
+    ]
+
+    for note, token in examples:
+        start = note.index(token)
+        span = _span(token, start=start)
+
+        text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            [span],
+            protected_terms_profile=_builtin_profile(),
+        )
+
+        assert spans[0].action == "replaced"
+        assert spans[0].replacement == "Carter"
+        assert token not in text

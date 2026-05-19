@@ -20,12 +20,13 @@ Replacement priority:
 1. Preserve protected clinical terms when a pyDeid span exactly matches one, or
    when a configured risky component appears inside an approved clinical phrase.
 2. Preserve narrow clinical abbreviation false positives such as `PMHx`.
-3. Apply stable date shifting/preservation/fallback when date shifting is enabled.
-4. Apply stable patient-name aliases when name replacement is enabled.
-5. Preserve narrow ordinary-token false positives such as articles/pronouns.
-6. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
-7. Preserve narrow title-context action-word false positives.
-8. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
+3. Preserve strict obstetric-history shorthand such as `G1P0A0`.
+4. Apply stable date shifting/preservation/fallback when date shifting is enabled.
+5. Apply stable patient-name aliases when name replacement is enabled.
+6. Preserve narrow ordinary-token false positives such as articles/pronouns.
+7. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
+8. Preserve narrow title-context action-word false positives.
+9. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
 
 Examples:
     Original:
@@ -49,6 +50,7 @@ Safety:
 from __future__ import annotations
 
 from dataclasses import replace
+import re
 from typing import Any
 
 from .date_shift import (
@@ -119,6 +121,90 @@ _NH_CONTEXT_BEFORE = (
     " transferred from ",
     " sent from ",
     " discharged to ",
+)
+
+_OBSTETRIC_HISTORY_PATTERNS = (
+    re.compile(r"^G\d{1,2}\s*P\d{1,2}(?:\s*A\d{1,2})?(?:\s*L\d{1,2})?$", re.IGNORECASE),
+    re.compile(r"^G\d{1,2}\s*T\d{1,2}\s*P\d{1,2}\s*A\d{1,2}\s*L\d{1,2}$", re.IGNORECASE),
+    re.compile(r"^G\d{1,2}\s*P\d{4}$", re.IGNORECASE),
+    re.compile(r"^G\d{1,2}\s*P\d{1,2}[-+]\d{1,2}(?:[-+]\d{1,2})?(?:[-+]\d{1,2})?$", re.IGNORECASE),
+)
+
+_PMH_CONTEXT_TERMS = (
+    "past medical",
+    "medical history",
+    "pmh of",
+    "pmh significant",
+    "pmh notable",
+    "with pmh",
+)
+
+_SAH_CONTEXT_TERMS = (
+    "aneurysm",
+    "ct head",
+    "cta head",
+    "external ventricular drain",
+    "fisher grade",
+    "haemorrhage",
+    "hemorrhage",
+    "hunt-hess",
+    "intracranial",
+    "lumbar puncture",
+    "nimodipine",
+    "subarachnoid",
+    "thunderclap",
+    "traumatic",
+    "vasospasm",
+)
+
+_MSH_CONTEXT_TERMS = (
+    "ihc",
+    "immunohistochemical",
+    "immunohistochemistry",
+    "lynch",
+    "mismatch repair",
+    "mlh1",
+    "mmr",
+    "msh2",
+    "msh6",
+    "nuclear expression",
+    "pms2",
+)
+
+_WES_CONTEXT_TERMS = (
+    "exome",
+    "genetic testing",
+    "genome",
+    "sequencing",
+    "trio",
+    "variant",
+    "whole exome sequencing",
+)
+
+_SAM_CONTEXT_TERMS = (
+    "echo",
+    "echocardiogram",
+    "hypertrophic cardiomyopathy",
+    "left ventricular outflow tract",
+    "lvot",
+    "mitral",
+    "systolic anterior motion",
+    "subaortic membrane",
+)
+
+_AMAN_CONTEXT_TERMS = (
+    "acute motor axonal neuropathy",
+    "gbs",
+    "guillain",
+    "neuropathy",
+)
+
+_NIA_AA_CONTEXT_TERMS = (
+    "alzheimer",
+    "alzheimer's association",
+    "national institute on aging",
+    "nia-aa",
+    "nia-aa criteria",
 )
 
 
@@ -297,30 +383,34 @@ def _project_replacement_for_span(
        preserve selected clinical abbreviations that pyDeid emits as facility
        acronyms inside longer clinical shorthand.
 
-    3. Stable date policy:
+    3. Obstetric-history shorthand veto:
+       preserve strict `G/P/A/L/T` notation that pyDeid emitted as a date,
+       location, postal-code, or identifier-like span.
+
+    4. Stable date policy:
        shift parseable full dates and month/year spans; preserve times,
        score/fraction notation, year-only spans, holidays, and seasons; replace
        unparseable date-like spans with `<DATE>`.
 
-    4. Stable patient-name policy:
+    5. Stable patient-name policy:
        replace explicit patient aliases with the deterministic fake patient
        identity.
 
-    5. Ordinary-token veto:
+    6. Ordinary-token veto:
        preserve selected articles, pronouns, and clinical shorthand that pyDeid
        emitted as very short name spans when context supports a non-name read.
 
-    6. Title-token-fragment veto:
+    7. Title-token-fragment veto:
        preserve non-identifying `Dr.` fragments when pyDeid split the title
        token itself into name spans in a strong title/name or role/title/name
        context.
 
-    7. Title-context action-word veto:
+    8. Title-context action-word veto:
        preserve narrow clinical action words that pyDeid emitted as
        title-derived name spans in `Dr.` contexts. Lower-case words use the
        base rule; capitalized words require following clinical-object context.
 
-    8. pyDeid fallback:
+    9. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
 
     Args:
@@ -370,6 +460,15 @@ def _project_replacement_for_span(
             "project_clinical_abbreviation_veto",
             clinical_abbreviation_match["project_clinical_abbreviation_policy"],
             clinical_abbreviation_match,
+        )
+
+    obstetric_history_match = _obstetric_history_veto_metadata(span)
+    if obstetric_history_match is not None:
+        return (
+            span.text,
+            "project_obstetric_history_veto",
+            obstetric_history_match["project_obstetric_history_policy"],
+            obstetric_history_match,
         )
 
     # Date policy: shift parseable dates, preserve date-like spans that should
@@ -507,24 +606,119 @@ def _clinical_abbreviation_veto_metadata(
     span: PHISpan,
     original_text: str,
 ) -> dict[str, str] | None:
-    """Return metadata when a pyDeid facility acronym is clinical shorthand.
+    """Return metadata when a pyDeid span is clinical shorthand.
 
-    pyDeid's hospital acronym list includes `PMH`. Its acronym matcher can emit
-    `PMH` inside `PMHx`, which is common shorthand for past medical history.
-    This project veto is intentionally narrow and span-local: it only preserves
-    the pyDeid-emitted `PMH` span when the next source character is `x`/`X`.
+    This project veto is intentionally narrow and span-local. It handles
+    observed abbreviation false positives such as `PMH` in medical-history
+    context, `PMH` inside `PMHx`, and short molecular/clinical abbreviations
+    only when bounded local context supports a clinical reading.
     """
-    if span.text.upper() != "PMH":
-        return None
-    if "site acronym" not in " ".join(span.pydeid_types or []).lower():
-        return None
-    if span.end >= len(original_text) or original_text[span.end] not in {"x", "X"}:
+    token = span.text.upper()
+    context = _span_context(original_text, span.start, span.end).casefold()
+
+    if token == "PMH" and _site_acronym_type(span):
+        if span.end < len(original_text) and original_text[span.end] in {"x", "X"}:
+            return {
+                "project_clinical_abbreviation_policy": "preserved_pmhx_site_acronym_overlap",
+                "project_clinical_abbreviation": original_text[span.start : span.end + 1],
+            }
+        if _context_contains(context, _PMH_CONTEXT_TERMS):
+            return {
+                "project_clinical_abbreviation_policy": "preserved_clinical_abbreviation_context",
+                "project_clinical_abbreviation": span.text,
+                "project_clinical_abbreviation_context": "past_medical_history",
+            }
+
+    if token == "MSH":
+        abbreviation = span.text
+        if span.end < len(original_text) and original_text[span.end] in {"2", "6"}:
+            abbreviation = original_text[span.start : span.end + 1]
+        if abbreviation.upper() in {"MSH2", "MSH6"} or _context_contains(context, _MSH_CONTEXT_TERMS):
+            return {
+                "project_clinical_abbreviation_policy": "preserved_clinical_abbreviation_context",
+                "project_clinical_abbreviation": abbreviation,
+                "project_clinical_abbreviation_context": "mismatch_repair",
+            }
+
+    if token in {"NIA", "AA"} and _is_nia_aa_component(span, original_text):
+        return {
+            "project_clinical_abbreviation_policy": (
+                "preserved_clinical_abbreviation_component_context"
+            ),
+            "project_clinical_abbreviation": span.text,
+            "project_clinical_abbreviation_context": "nia_aa_criteria",
+        }
+
+    context_rules = {
+        "SAH": ("subarachnoid_hemorrhage", _SAH_CONTEXT_TERMS),
+        "WES": ("whole_exome_sequencing", _WES_CONTEXT_TERMS),
+        "SAM": ("subaortic_membrane", _SAM_CONTEXT_TERMS),
+        "AMAN": ("acute_motor_axonal_neuropathy", _AMAN_CONTEXT_TERMS),
+        "NIA": ("nia_aa_criteria", _NIA_AA_CONTEXT_TERMS),
+    }
+    if token in context_rules:
+        context_name, context_terms = context_rules[token]
+        if _context_contains(context, context_terms) or _context_contains(
+            _span_context(original_text, span.start, span.end, window=220).casefold(),
+            context_terms,
+        ):
+            return {
+                "project_clinical_abbreviation_policy": "preserved_clinical_abbreviation_context",
+                "project_clinical_abbreviation": span.text,
+                "project_clinical_abbreviation_context": context_name,
+            }
+
+    return None
+
+
+def _obstetric_history_veto_metadata(
+    span: PHISpan,
+) -> dict[str, str] | None:
+    """Return metadata for strict obstetric-history shorthand preservation."""
+    normalized = re.sub(r"\s+", "", span.text)
+    if not any(pattern.match(normalized) for pattern in _OBSTETRIC_HISTORY_PATTERNS):
         return None
 
     return {
-        "project_clinical_abbreviation_policy": "preserved_pmhx_site_acronym_overlap",
-        "project_clinical_abbreviation": original_text[span.start : span.end + 1],
+        "project_obstetric_history_policy": "preserved_strict_obstetric_shorthand",
+        "project_obstetric_history_pattern": "gpa_or_gtpal",
     }
+
+
+def _site_acronym_type(span: PHISpan) -> bool:
+    """Return true for pyDeid site-acronym type labels."""
+    return "site acronym" in " ".join(span.pydeid_types or []).lower()
+
+
+def _context_contains(context: str, terms: tuple[str, ...]) -> bool:
+    """Return true when any configured cue appears in casefolded context."""
+    return any(term in context for term in terms)
+
+
+def _is_nia_aa_component(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true when `NIA`/`AA` is a pyDeid span inside `NIA-AA`."""
+    window = original_text[max(0, span.start - 4) : min(len(original_text), span.end + 4)]
+    absolute_offset = max(0, span.start - 4)
+    for match in re.finditer(r"(?<![A-Za-z])NIA-AA(?![A-Za-z])", window, re.IGNORECASE):
+        start = absolute_offset + match.start()
+        end = absolute_offset + match.end()
+        if start <= span.start and span.end <= end:
+            return True
+    return False
+
+
+def _span_context(
+    text: str,
+    start: int,
+    end: int,
+    *,
+    window: int = 90,
+) -> str:
+    """Return bounded local context around a pyDeid span."""
+    return text[max(0, start - window) : min(len(text), end + window)]
 
 
 def _looks_like_initial_or_case_label_context(

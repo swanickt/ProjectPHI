@@ -61,12 +61,17 @@ _NATURAL_LANGUAGE_FULL_DATE_RE = re.compile(
     r"^\s*([A-Za-z]{3,9})\.?\s+([0-9]{1,2}),\s*([0-9]{4})\s*$",
     re.IGNORECASE,
 )
+_DAY_MONTH_YEAR_FULL_DATE_RE = re.compile(
+    r"^\s*([0-9]{1,2})\s+([A-Za-z]{3,9})\.?\s+([0-9]{4})\s*$",
+    re.IGNORECASE,
+)
 _NATURAL_LANGUAGE_MONTH_YEAR_RE = re.compile(
     r"^\s*([A-Za-z]{3,9})\.?\s+([0-9]{4})\s*$",
     re.IGNORECASE,
 )
 _SLASH_SCORE_OR_FRACTION_RE = re.compile(r"^\s*\d{1,2}/\d{1,3}\s*$")
 _SLASH_APGAR_SCORE_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{1,2}\s*$")
+_TUMOR_MARKER_NUMBER_RE = re.compile(r"^\s*\d{1,2}(?:[-.]\d{1,2})\s*$")
 _APGAR_TIMING_RE = re.compile(
     r"(?:at|@)\s*(?:1|one)\s*(?:,|\band\b|/)\s*(?:5|five)"
     r"(?:\s*(?:,|\band\b|/)\s*(?:10|ten))?\s*(?:min|mins|minute|minutes)\b",
@@ -78,6 +83,8 @@ _SCORE_OR_FRACTION_CONTEXT_TERMS = {
     "activity score",
     "admission score",
     "apgar",
+    "apgar score",
+    "apgar scores",
     "assessment",
     "assessment score",
     "assessment tool",
@@ -93,25 +100,37 @@ _SCORE_OR_FRACTION_CONTEXT_TERMS = {
     "criteria",
     "disability score",
     "ecog",
+    "edss",
     "functional score",
+    "functional independence measure",
+    "gad-7",
     "gcs",
     "glasgow",
+    "glasgow coma scale",
     "gleason",
     "grade",
     "ham-d",
+    "hads",
     "index",
+    "icu mobility scale",
     "karnofsky",
     "kps",
+    "medical research council sum score",
     "moca",
     "modified rankin",
     "mrc",
+    "mrc-ss",
     "nihss",
     "performance status",
+    "phq-9",
+    "physical function icu test",
     "points",
     "score",
     "scored",
     "scoring",
     "scale",
+    "short physical performance battery",
+    "sppb",
     "tool",
     "updrs",
 }
@@ -120,16 +139,31 @@ _RATIO_OR_COUNT_CONTEXT_TERMS = {
     "biopsied",
     "biopsy",
     "core",
+    "core samples",
+    "cores positive",
     "fraction",
+    "field",
+    "high-power field",
+    "hpf",
     "invasion",
     "lymph node",
     "lymph nodes",
     "metastatic lymph node",
+    "mitoses",
+    "mitotic count",
     "node",
     "nodes",
+    "nodes positive",
+    "per hpf",
     "positive",
+    "positive nodes",
     "ratio",
+    "samples",
     "sentinel",
+    "sentinel lymph nodes",
+    "sentinel nodes",
+    "specimens",
+    "tumor cells",
 }
 
 _STAGING_CONTEXT_TERMS = {
@@ -175,6 +209,25 @@ _VISUAL_ACUITY_CONTEXT_TERMS = {
     "vision",
     "visual",
     "visual acuity",
+}
+
+_TUMOR_MARKER_CONTEXT_TERMS = {
+    "afp",
+    "ca 125",
+    "ca 15-3",
+    "ca 19-9",
+    "ca 27.29",
+    "ca-125",
+    "ca15-3",
+    "ca19-9",
+    "ca27.29",
+    "cea",
+    "he4",
+    "ng/ml",
+    "psa",
+    "tumor marker",
+    "tumour marker",
+    "u/ml",
 }
 
 
@@ -241,7 +294,7 @@ def _is_parseable_full_date_span(
         and parsed.get("day") not in (None, "")
         and parsed.get("month") not in (None, "")
         and parsed.get("year") not in (None, "")
-    )
+    ) or _parse_natural_language_full_date(span.text) is not None
 
 
 def _is_parseable_month_year_span(
@@ -275,6 +328,8 @@ def _shift_full_date_span(
         return None
 
     shifted_date = original_date + timedelta(days=date_shift_offset)
+    if _looks_like_day_month_year_full_date(span.text):
+        return f"{shifted_date.day} {_MONTH_NAMES[shifted_date.month]} {shifted_date.year}"
     if _looks_like_natural_language_full_date(span.text):
         return f"{_MONTH_NAMES[shifted_date.month]} {shifted_date.day}, {shifted_date.year}"
     if _looks_like_iso_date(span.text):
@@ -286,6 +341,8 @@ def _date_shift_policy_for_full_date_span(
     span: PHISpan,  # Shifted full-date span.
 ) -> str:
     """Return the audit policy label for a shifted full-date span."""
+    if _looks_like_day_month_year_full_date(span.text):
+        return "shifted_day_month_year_natural_language_full_date"
     if _looks_like_natural_language_full_date(span.text):
         return "shifted_natural_language_full_date"
     return "shifted_full_date"
@@ -330,15 +387,20 @@ def _is_score_or_fraction_date_span(
         return False
     if _is_apgar_slash_score_span(span, original_text):
         return True
+
+    context = _span_context(original_text, span.start, span.end).lower()
+    if _TUMOR_MARKER_NUMBER_RE.match(span.text):
+        return any(term in context for term in _TUMOR_MARKER_CONTEXT_TERMS)
+
     if not _SLASH_SCORE_OR_FRACTION_RE.match(span.text):
         return False
 
-    context = _span_context(original_text, span.start, span.end).lower()
     context_terms = (
         _SCORE_OR_FRACTION_CONTEXT_TERMS
         | _RATIO_OR_COUNT_CONTEXT_TERMS
         | _STAGING_CONTEXT_TERMS
         | _VISUAL_ACUITY_CONTEXT_TERMS
+        | _TUMOR_MARKER_CONTEXT_TERMS
     )
     return any(term in context for term in context_terms)
 
@@ -404,10 +466,18 @@ def _parse_natural_language_full_date(
     # This parser is intentionally span-local: pyDeid has already detected and
     # pruned the candidate date span, so project code is not scanning notes.
     match = _NATURAL_LANGUAGE_FULL_DATE_RE.match(text)
+    if match:
+        month_text, day_text, year_text = match.groups()
+        try:
+            return date(int(year_text), _month_number(month_text), int(day_text))
+        except (KeyError, ValueError):
+            pass
+
+    match = _DAY_MONTH_YEAR_FULL_DATE_RE.match(text)
     if not match:
         return None
 
-    month_text, day_text, year_text = match.groups()
+    day_text, month_text, year_text = match.groups()
     try:
         return date(int(year_text), _month_number(month_text), int(day_text))
     except (KeyError, ValueError):
@@ -462,6 +532,13 @@ def _looks_like_natural_language_full_date(
 ) -> bool:
     """Return true for supported English month-name full-date display text."""
     return _NATURAL_LANGUAGE_FULL_DATE_RE.match(text) is not None
+
+
+def _looks_like_day_month_year_full_date(
+    text: str,  # Candidate display text.
+) -> bool:
+    """Return true for supported day-month-year English date display text."""
+    return _DAY_MONTH_YEAR_FULL_DATE_RE.match(text) is not None
 
 
 def _is_date_like_span(

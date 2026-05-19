@@ -13,6 +13,10 @@ def _natural_date(text):
     return datetime.strptime(text, "%B %d, %Y").date()
 
 
+def _day_month_year_date(text):
+    return datetime.strptime(text, "%d %B %Y").date()
+
+
 def _month_year_date(text):
     return datetime.strptime(text, "%B %Y").date()
 
@@ -121,6 +125,72 @@ def test_stable_date_shift_uses_same_offset_for_iso_and_natural_language_dates()
         days=iso_span.metadata["project_date_shift_days"]
     )
     assert natural_span.metadata["project_date_shift_policy"] == "shifted_natural_language_full_date"
+
+def test_stable_date_shift_shifts_day_month_year_natural_language_dates():
+    note = "Follow-up occurred on 8 August 2019."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-date-day-month-001",
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+    )
+
+    date_span = _date_spans(result)[0]
+    assert "8 August 2019" not in result.deidentified_text
+    assert "<DATE>" not in result.deidentified_text
+    assert date_span.replacement != "<DATE>"
+    assert _day_month_year_date(date_span.replacement) == _day_month_year_date(
+        date_span.text
+    ) + timedelta(days=date_span.metadata["project_date_shift_days"])
+    assert date_span.metadata["replacement_source"] == "project_stable_date_shift"
+    assert date_span.metadata["project_date_shift_policy"] == (
+        "shifted_day_month_year_natural_language_full_date"
+    )
+    assert note[date_span.start : date_span.end] == date_span.text
+    project_start = date_span.metadata["project_replacement_start"]
+    project_end = date_span.metadata["project_replacement_end"]
+    assert result.deidentified_text[project_start:project_end] == date_span.replacement
+    assert "8 August 2019" not in " ".join(result.warnings)
+
+def test_stable_date_shift_day_month_year_preserves_interval_between_dates():
+    note = "Started on 8 August 2019 and stopped on 25 August 2019."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-date-day-month-002",
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+    )
+
+    spans = _date_spans(result)
+    assert len(spans) >= 2
+    shifted_dates = [_day_month_year_date(span.replacement) for span in spans[:2]]
+    original_dates = [_day_month_year_date(span.text) for span in spans[:2]]
+    assert shifted_dates[1] - shifted_dates[0] == original_dates[1] - original_dates[0]
+    assert all(span.replacement != "<DATE>" for span in spans[:2])
+
+def test_stable_date_shift_uses_same_offset_for_month_day_and_day_month_dates():
+    note = "Started on March 14, 2026 and reviewed on 10 April 2026."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-date-day-month-003",
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+    )
+
+    month_day_span = next(span for span in _date_spans(result) if span.text == "March 14, 2026")
+    day_month_span = next(span for span in _date_spans(result) if span.text == "10 April 2026")
+    assert month_day_span.metadata["project_date_shift_days"] == day_month_span.metadata[
+        "project_date_shift_days"
+    ]
+    assert _natural_date(month_day_span.replacement) == _natural_date(
+        month_day_span.text
+    ) + timedelta(days=day_month_span.metadata["project_date_shift_days"])
+    assert _day_month_year_date(day_month_span.replacement) == _day_month_year_date(
+        day_month_span.text
+    ) + timedelta(days=month_day_span.metadata["project_date_shift_days"])
 
 def test_stable_date_shift_shifts_month_year_spans_without_day_granularity():
     note = "Diagnosis in March 2021 and treatment in September 2021."
@@ -316,6 +386,62 @@ def test_stable_date_shift_preserves_visual_acuity_fraction_in_date_span():
     assert warnings == []
     assert final_spans[0].metadata["project_date_shift_policy"] == "preserved_score_or_fraction"
 
+def test_stable_date_shift_preserves_tumor_marker_numeric_span():
+    note = "Tumor markers CA 15-3 and CA 27.29 were elevated."
+    start = note.index("15-3")
+    span = PHISpan(
+        start=start,
+        end=start + len("15-3"),
+        text="15-3",
+        label="DATE",
+        source="pyDeid",
+        replacement="<DATE>",
+        pydeid_types=["Month/Day [mm-dd]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "15", "day": "3"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=30,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    assert final_spans[0].action == "preserved"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "preserved_score_or_fraction"
+    assert (
+        final_spans[0].metadata["project_date_shift_preservation_reason"]
+        == "score_or_fraction_context"
+    )
+
+def test_stable_date_shift_does_not_preserve_hyphen_partial_date_without_marker_context():
+    note = "Vancomycin was started on 8-29 after cultures."
+    start = note.index("8-29")
+    span = PHISpan(
+        start=start,
+        end=start + len("8-29"),
+        text="8-29",
+        label="DATE",
+        source="pyDeid",
+        replacement="<DATE>",
+        pydeid_types=["Month/Day [mm-dd]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "8", "day": "29"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=30,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text != note
+    assert final_spans[0].replacement == "<DATE>"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "unparseable_date_placeholder"
+    assert warnings == ["Unparseable pyDeid date span replaced with <DATE>."]
+
 def test_stable_date_shift_preserves_apgar_slash_score_in_date_span():
     note = "Apgar scores were 4/7/10 at 1, 5 and 10 min after delivery."
     start = note.index("4/7/10")
@@ -479,6 +605,144 @@ def test_reconstruction_still_replaces_standalone_pmh_site_acronym():
     )
 
     assert deidentified_text == "Transferred from SMH for review."
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+
+def test_reconstruction_preserves_standalone_pmh_in_medical_history_context():
+    note = "This patient has PMH of PCOS, obesity, and HTN."
+    start = note.index("PMH")
+    span = PHISpan(
+        start=start,
+        end=start + len("PMH"),
+        text="PMH",
+        label="HOSPITAL",
+        source="pyDeid",
+        replacement="SMH",
+        pydeid_types=["Site Acronym"],
+        metadata={},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    assert final_spans[0].action == "preserved"
+    assert final_spans[0].metadata["replacement_source"] == "project_clinical_abbreviation_veto"
+    assert (
+        final_spans[0].metadata["project_clinical_abbreviation_policy"]
+        == "preserved_clinical_abbreviation_context"
+    )
+    assert final_spans[0].metadata["project_clinical_abbreviation_context"] == "past_medical_history"
+
+def test_reconstruction_preserves_context_bound_clinical_abbreviations():
+    examples = [
+        ("The CT head showed SAH from aneurysm rupture.", "SAH", "subarachnoid_hemorrhage"),
+        ("IHC showed intact expression of MSH2 and MSH6.", "MSH", "mismatch_repair"),
+        ("Whole exome sequencing WES identified a variant.", "WES", "whole_exome_sequencing"),
+        ("The echo showed SAM from subaortic membrane.", "SAM", "subaortic_membrane"),
+        ("AMAN variant of Guillain-Barre syndrome was considered.", "AMAN", "acute_motor_axonal_neuropathy"),
+        ("The NIA-AA criteria were applied.", "NIA", "nia_aa_criteria"),
+        ("Traumatic SAH was treated with nimodipine.", "SAH", "subarachnoid_hemorrhage"),
+        ("Subaortic membrane caused obstruction and SAM persisted.", "SAM", "subaortic_membrane"),
+    ]
+
+    for note, token, context_name in examples:
+        start = note.index(token)
+        span = PHISpan(
+            start=start,
+            end=start + len(token),
+            text=token,
+            label="HOSPITAL",
+            source="pyDeid",
+            replacement="SMH",
+            pydeid_types=["Site Acronym"],
+            metadata={},
+        )
+
+        deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            [span],
+        )
+
+        assert deidentified_text == note
+        assert warnings == []
+        assert final_spans[0].metadata["replacement_source"] == "project_clinical_abbreviation_veto"
+        assert final_spans[0].metadata["project_clinical_abbreviation_context"] == context_name
+
+def test_reconstruction_does_not_preserve_context_bound_abbreviation_without_context():
+    note = "Transferred from SAH for review."
+    start = note.index("SAH")
+    span = PHISpan(
+        start=start,
+        end=start + len("SAH"),
+        text="SAH",
+        label="HOSPITAL",
+        source="pyDeid",
+        replacement="SMH",
+        pydeid_types=["Site Acronym"],
+        metadata={},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+    )
+
+    assert deidentified_text == "Transferred from SMH for review."
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+
+def test_reconstruction_preserves_strict_obstetric_history_shorthand():
+    note = "A 28 year old female G1P0A0 was admitted."
+    start = note.index("G1P0A0")
+    span = PHISpan(
+        start=start,
+        end=start + len("G1P0A0"),
+        text="G1P0A0",
+        label="LOCATION",
+        source="pyDeid",
+        replacement="E6V0W8",
+        pydeid_types=["Postal Code"],
+        metadata={},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    assert final_spans[0].action == "preserved"
+    assert final_spans[0].metadata["replacement_source"] == "project_obstetric_history_veto"
+    assert (
+        final_spans[0].metadata["project_obstetric_history_policy"]
+        == "preserved_strict_obstetric_shorthand"
+    )
+
+def test_reconstruction_obstetric_history_veto_does_not_preserve_random_codes():
+    note = "The study code G1-PATIENT was listed."
+    start = note.index("G1-PATIENT")
+    span = PHISpan(
+        start=start,
+        end=start + len("G1-PATIENT"),
+        text="G1-PATIENT",
+        label="ID",
+        source="pyDeid",
+        replacement="SYN-1234",
+        pydeid_types=["ID"],
+        metadata={},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+    )
+
+    assert deidentified_text == "The study code SYN-1234 was listed."
     assert warnings == []
     assert final_spans[0].metadata["replacement_source"] == "pyDeid"
 

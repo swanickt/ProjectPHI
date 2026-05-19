@@ -110,6 +110,11 @@ def test_deidentify_csv_row_failure_is_sanitized_and_omitted(tmp_path, monkeypat
     assert audit_rows[0]["project_ordinary_token_policy"] == ""
     assert audit_rows[0]["project_ordinary_token"] == ""
     assert audit_rows[0]["project_ordinary_token_category"] == ""
+    assert audit_rows[0]["project_clinical_abbreviation_policy"] == ""
+    assert audit_rows[0]["project_clinical_abbreviation"] == ""
+    assert audit_rows[0]["project_clinical_abbreviation_context"] == ""
+    assert audit_rows[0]["project_obstetric_history_policy"] == ""
+    assert audit_rows[0]["project_obstetric_history_pattern"] == ""
 
 def test_deidentify_csv_stable_date_shift_audit_metadata_without_raw_phi(tmp_path):
     input_file = tmp_path / "input.csv"
