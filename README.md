@@ -285,8 +285,10 @@ replacement_source=project_stable_patient_name
 alias_match_type=family
 ```
 
-Stable patient-name surrogates currently require explicit aliases. ProjectPHI does not infer
-patient aliases from note text.
+Stable patient-name surrogates require explicit aliases. The wrapper does not infer
+patient aliases from note text. Stable fake patient identities prefer Faker's
+Canadian English locale (en_CA) and are keyed by patient_id plus a runtime
+secret.
 
 ## Protected Clinical Terms
 

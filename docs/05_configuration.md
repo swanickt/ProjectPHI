@@ -209,8 +209,10 @@ result = deidentify_note(
 
 Only explicit aliases and conservative alias components are treated as the
 patient. Matching aliases use one deterministic Faker-generated identity
-seeded from `patient_id` and the patient-name secret. Unknown names remain
-pyDeid replacements.
+seeded from patient_id and the patient-name secret. ProjectPHI prefers
+Faker's Canadian English locale (en_CA), falls back to Faker's default locale
+if needed, and uses the small in-source name pools only as an emergency
+fallback. Unknown names remain pyDeid replacements.
 
 The project does not infer gender from aliases, note text, pronouns, diagnosis,
 or service line. Exact fake names may depend on the installed Faker

@@ -145,11 +145,14 @@ pyDeid replacement behavior and can be marked as `unknown_name_pydeid` when
 reconstruction metadata is present.
 
 For matching explicit patient aliases, the fake identity is generated with
-deterministic Faker seeded from `patient_id` and the patient-name secret. The
-wrapper does not infer gender from the original alias, note text, diagnosis,
-or pronouns. Exact fake names may vary if the runtime Faker version/provider
-data changes, so deployments that require byte-for-byte stable surrogates
-should pin their environment.
+deterministic Faker seeded from patient_id and the patient-name secret.
+ProjectPHI prefers Faker's Canadian English locale (en_CA) for these stable
+patient-name surrogates, falls back to Faker's default locale if that locale is
+not available, and uses the tiny in-source name pools only as an emergency
+fallback. The wrapper does not infer gender from the original alias, note text,
+diagnosis, or pronouns. Exact fake names may vary if the runtime Faker
+version/provider data changes, so deployments that require byte-for-byte stable
+surrogates should pin their environment.
 
 ## Protected Clinical Terms
 
