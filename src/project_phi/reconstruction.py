@@ -23,8 +23,9 @@ Replacement priority:
 3. Apply stable date shifting/preservation/fallback when date shifting is enabled.
 4. Apply stable patient-name aliases when name replacement is enabled.
 5. Preserve narrow ordinary-token false positives such as articles/pronouns.
-6. Preserve narrow title-context action-word false positives.
-7. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
+6. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
+7. Preserve narrow title-context action-word false positives.
+8. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
 
 Examples:
     Original:
@@ -70,6 +71,8 @@ from .protected_terms import _protected_term_match, _protected_term_metadata
 from .title_context import (
     _title_context_action_word_match,
     _title_context_action_word_metadata,
+    _title_token_fragment_match,
+    _title_token_fragment_metadata,
 )
 
 _ORDINARY_ARTICLE_PRONOUN_TOKENS = {
@@ -304,12 +307,17 @@ def _project_replacement_for_span(
        preserve selected articles, pronouns, and clinical shorthand that pyDeid
        emitted as very short name spans when context supports a non-name read.
 
-    6. Title-context action-word veto:
+    6. Title-token-fragment veto:
+       preserve non-identifying `Dr.` fragments when pyDeid split the title
+       token itself into name spans in a strong title/name or role/title/name
+       context.
+
+    7. Title-context action-word veto:
        preserve narrow clinical action words that pyDeid emitted as
        title-derived name spans in `Dr.` contexts. Lower-case words use the
        base rule; capitalized words require following clinical-object context.
 
-    7. pyDeid fallback:
+    8. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
 
     Args:
@@ -336,6 +344,8 @@ def _project_replacement_for_span(
         - title-context action word: `("reviewed",
           "project_title_context_action_word_veto",
           "title_context_action_word_exact_match", {...})`
+        - title-token fragment: `("D", "project_title_token_veto",
+          "preserved_title_token_fragment", {...})`
         - unknown name: `("[**Name**]", "pyDeid", "unknown_name_pydeid", {})`
 
     Notes:
@@ -419,6 +429,19 @@ def _project_replacement_for_span(
             "project_ordinary_token_veto",
             ordinary_token_match["project_ordinary_token_policy"],
             ordinary_token_match,
+        )
+
+    title_token_match = _title_token_fragment_match(
+        span,
+        original_text=original_text,
+        spans=all_spans or [],
+    )
+    if title_token_match is not None:
+        return (
+            span.text,
+            "project_title_token_veto",
+            title_token_match["project_title_token_policy"],
+            _title_token_fragment_metadata(title_token_match),
         )
 
     title_context_match = _title_context_action_word_match(

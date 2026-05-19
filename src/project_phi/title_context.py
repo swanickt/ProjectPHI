@@ -634,6 +634,52 @@ def _title_context_action_word_metadata(match: dict[str, str]) -> dict[str, str]
     return dict(match)
 
 
+def _title_token_fragment_match(
+    span: PHISpan,
+    *,
+    original_text: str,
+    spans: list[PHISpan],
+) -> dict[str, str] | None:
+    """Return metadata when pyDeid split a non-identifying title token.
+
+    This handles cases where pyDeid emits `D` and `r.` as name spans inside
+    `Dr.` after a clinical role such as `family physician`. It does not preserve
+    arbitrary initials: the candidate must be inside the exact title token and
+    supported by either a preceding clinical role or adjacent following name
+    spans.
+    """
+    if span.label != "NAME":
+        return None
+    if _has_custom_name_type(span):
+        return None
+
+    title_bounds = _title_token_bounds_for_fragment(span, original_text)
+    if title_bounds is None:
+        return None
+
+    title_start, title_end, title_token = title_bounds
+    if not (
+        _text_before_has_clinical_role(original_text[:title_start])
+        or _title_token_has_following_name_span(title_end, span, spans, original_text)
+    ):
+        return None
+
+    return {
+        "project_title_token_policy": "preserved_title_token_fragment",
+        "project_title_token": title_token,
+        "project_title_token_context": (
+            "clinical_role_title_name_sequence"
+            if _text_before_has_clinical_role(original_text[:title_start])
+            else "title_name_sequence"
+        ),
+    }
+
+
+def _title_token_fragment_metadata(match: dict[str, str]) -> dict[str, str]:
+    """Return audit/reconstruction metadata for a title-token-fragment veto."""
+    return dict(match)
+
+
 def _is_single_lowercase_alpha_token(text: str) -> bool:
     """Return true for one lower-case alphabetic source token."""
     token = str(text).strip(_SURROUNDING_PUNCTUATION)
@@ -711,7 +757,11 @@ def _has_role_context(
     original_text: str,
 ) -> bool:
     """Return true when a recognized clinical role immediately precedes a span."""
-    text_before = original_text[: span.start]
+    return _text_before_has_clinical_role(original_text[: span.start])
+
+
+def _text_before_has_clinical_role(text_before: str) -> bool:
+    """Return true when normalized preceding text ends with a clinical role."""
     normalized = " ".join(text_before.strip(_SURROUNDING_PUNCTUATION).casefold().split())
     if not normalized:
         return False
@@ -719,6 +769,43 @@ def _has_role_context(
         normalized == role or normalized.endswith(" " + role)
         for role in _clinical_role_terms()
     )
+
+
+def _title_token_bounds_for_fragment(
+    span: PHISpan,
+    original_text: str,
+) -> tuple[int, int, str] | None:
+    """Return `Dr.` bounds when `span` is entirely inside that title token."""
+    window_start = max(0, span.start - 4)
+    window_end = min(len(original_text), span.end + 4)
+    window = original_text[window_start:window_end]
+    for match in re.finditer(r"(?<![A-Za-z])Dr\.", window, re.IGNORECASE):
+        title_start = window_start + match.start()
+        title_end = window_start + match.end()
+        if title_start <= span.start and span.end <= title_end:
+            return title_start, title_end, original_text[title_start:title_end]
+    return None
+
+
+def _title_token_has_following_name_span(
+    title_end: int,
+    span: PHISpan,
+    spans: list[PHISpan],
+    original_text: str,
+) -> bool:
+    """Return true when a title token is followed by an adjacent name span."""
+    following_spans = [
+        candidate
+        for candidate in spans
+        if candidate.start >= span.end and candidate.label == "NAME"
+    ]
+    if not following_spans:
+        return False
+
+    following_span = min(following_spans, key=lambda candidate: candidate.start)
+    if following_span.start <= title_end:
+        return True
+    return not original_text[title_end : following_span.start].strip()
 
 
 def _previous_adjacent_span(

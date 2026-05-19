@@ -139,6 +139,57 @@ def test_reconstruction_preserves_action_word_after_single_title_name_span():
     assert final_spans[1].action == "preserved"
 
 
+def test_reconstruction_preserves_split_dr_title_after_clinical_role():
+    note = "Copy of note to family physician Dr. Michael Tan."
+    spans = [
+        _name_span("D", note.index("Dr."), replacement="James", pydeid_types=["Name Initial (PRE)"]),
+        _name_span("r.", note.index("r."), replacement="Charles", pydeid_types=["Name9 (PRE)"]),
+        _name_span("Michael", note.index("Michael"), replacement="Lindsey"),
+        _name_span("Tan", note.index("Tan"), replacement="Alvarez"),
+    ]
+
+    text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(note, spans)
+
+    assert warnings == []
+    assert text == "Copy of note to family physician Dr. Lindsey Alvarez."
+    assert final_spans[0].action == "preserved"
+    assert final_spans[1].action == "preserved"
+    assert final_spans[0].metadata["replacement_source"] == "project_title_token_veto"
+    assert final_spans[1].metadata["replacement_source"] == "project_title_token_veto"
+    assert final_spans[0].metadata["project_title_token_policy"] == "preserved_title_token_fragment"
+    assert final_spans[1].metadata["project_title_token"] == "Dr."
+    assert final_spans[2].metadata["replacement_source"] == "pyDeid"
+    assert final_spans[3].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_preserves_split_dr_title_before_adjacent_name():
+    note = "Copy of note to Dr. Michael Tan."
+    spans = [
+        _name_span("D", note.index("Dr."), replacement="James", pydeid_types=["Name Initial (PRE)"]),
+        _name_span("r.", note.index("r."), replacement="Charles", pydeid_types=["Name9 (PRE)"]),
+        _name_span("Michael", note.index("Michael"), replacement="Lindsey"),
+        _name_span("Tan", note.index("Tan"), replacement="Alvarez"),
+    ]
+
+    text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(note, spans)
+
+    assert warnings == []
+    assert text == "Copy of note to Dr. Lindsey Alvarez."
+    assert final_spans[0].metadata["replacement_source"] == "project_title_token_veto"
+    assert final_spans[1].metadata["replacement_source"] == "project_title_token_veto"
+    assert final_spans[0].metadata["project_title_token_context"] == "title_name_sequence"
+
+
+def test_reconstruction_does_not_preserve_initial_outside_exact_dr_title_token():
+    note = "Patient D. Smith attended."
+    span = _name_span("D", note.index("D."), replacement="James", pydeid_types=["Name Initial (PRE)"])
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+    assert text == "Patient James. Smith attended."
+    assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
 def test_reconstruction_preserves_capitalized_action_word_with_generic_patient_object():
     note = "Dr. Examined the patient."
     span = _name_span("Examined", 4)
@@ -442,6 +493,26 @@ def test_deidentify_note_preserves_title_context_action_words_from_pydeid():
     assert {"examined", "reviewed"}.issubset(set(preserved_words))
 
 
+def test_deidentify_note_preserves_split_dr_title_after_role_from_pydeid():
+    note = "Copy of note to family physician Dr. Michael Tan."
+
+    result = deidentify_note(note)
+
+    assert "family physician Dr. " in result.deidentified_text
+    assert "Michael Tan" not in result.deidentified_text
+    assert any(
+        span.text == "D"
+        and span.metadata.get("replacement_source") == "project_title_token_veto"
+        and span.metadata.get("project_title_token_policy") == "preserved_title_token_fragment"
+        for span in result.spans
+    )
+    assert any(
+        span.text == "r."
+        and span.metadata.get("replacement_source") == "project_title_token_veto"
+        for span in result.spans
+    )
+
+
 def test_deidentify_note_preserves_protected_term_plus_following_action_word():
     note = "Dr. Tomosynthesis reviewed mammography with tomosynthesis."
 
@@ -542,3 +613,33 @@ def test_deidentify_csv_audit_records_title_context_metadata(tmp_path):
     )
     assert title_rows[0]["project_title_context_trigger"] == "strict_title_name_heuristic"
     assert title_rows[0]["project_title_context_word"] == "examined"
+
+
+def test_deidentify_csv_audit_records_title_token_metadata(tmp_path):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    audit_file = tmp_path / "audit.csv"
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-title-002",
+                "note_id": "Note/synth-title-002",
+                "note_text": "Copy of note to family physician Dr. Michael Tan.",
+            }
+        ],
+    )
+
+    summary = deidentify_csv(input_file, output_file, audit_output_file=audit_file)
+
+    output_rows = _read_csv(output_file)
+    audit_rows = _read_csv(audit_file)
+    title_token_rows = [
+        row for row in audit_rows if row["replacement_source"] == "project_title_token_veto"
+    ]
+    assert summary["rows_failed"] == 0
+    assert "family physician Dr. " in output_rows[0]["note_text"]
+    assert "Michael Tan" not in output_rows[0]["note_text"]
+    assert title_token_rows
+    assert {row["project_title_token"] for row in title_token_rows} == {"Dr."}
+    assert title_token_rows[0]["project_title_token_policy"] == "preserved_title_token_fragment"
