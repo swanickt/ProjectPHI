@@ -6,10 +6,11 @@ misses, while unknown names remain pyDeid behavior. Single-token aliases such
 as `Chen`, `Green`, or `Cook` require nearby provider-role context so common
 ordinary words are not replaced globally.
 
-The module also handles a narrow semantic-preservation case where pyDeid emits
-one name span containing both a configured provider alias and a lower-case
-clinical verb. In that case, the alias can be replaced while the verb is kept
-when role and following clinical-context guards pass.
+The module also handles narrow semantic-preservation cases where pyDeid emits
+configured provider aliases beside lower-case clinical verbs. If pyDeid emits
+one combined name span, or adjacent provider/action name spans, the alias can
+be replaced while the verb is kept when role and following clinical-context
+guards pass.
 """
 
 from __future__ import annotations
@@ -311,6 +312,52 @@ def _project_provider_name_replacement(
     return identity["family"], "single_token"
 
 
+def _project_provider_adjacent_action_word_metadata(
+    span: PHISpan,
+    *,
+    original_text: str,
+    spans: list[PHISpan],
+    provider_alias_profile: dict[str, Any],
+    provider_name_identities: dict[str, dict[str, str]],
+) -> dict[str, str] | None:
+    """Return metadata when a lower-case action follows a provider alias span."""
+    if span.label != "NAME":
+        return None
+    normalized_action = _normalize_action_word(span.text)
+    if normalized_action not in _CLINICAL_ACTION_WORDS:
+        return None
+    if normalized_action in provider_alias_profile["aliases"]:
+        return None
+    stripped_action = span.text.strip(" \t\r\n.,;:")
+    if not stripped_action.isalpha() or not stripped_action.islower():
+        return None
+    if _following_context_type(span, original_text=original_text) is None:
+        return None
+
+    previous_span = _previous_adjacent_span(span, spans, original_text)
+    if previous_span is None or previous_span.label != "NAME":
+        return None
+    provider_replacement = _project_provider_name_replacement(
+        previous_span,
+        original_text=original_text,
+        provider_alias_profile=provider_alias_profile,
+        provider_name_identities=provider_name_identities,
+    )
+    if provider_replacement is None:
+        return None
+    _replacement_text, previous_policy = provider_replacement
+    if previous_policy.endswith("_trailing_action"):
+        return None
+
+    return {
+        "project_provider_action_policy": (
+            "provider_alias_adjacent_lowercase_action_word_match"
+        ),
+        "project_provider_action_trigger": "explicit_provider_alias_before_action_word",
+        "project_provider_action_word": normalized_action,
+    }
+
+
 def _project_provider_trailing_action_replacement(
     span: PHISpan,
     *,
@@ -386,6 +433,22 @@ def _provider_alias_replacement_text(
     return identity["family"]
 
 
+def _previous_adjacent_span(
+    span: PHISpan,
+    spans: list[PHISpan],
+    original_text: str,
+) -> PHISpan | None:
+    """Return the immediately preceding span when only whitespace separates it."""
+    previous_spans = [candidate for candidate in spans if candidate.end <= span.start]
+    if not previous_spans:
+        return None
+    previous_span = max(previous_spans, key=lambda candidate: (candidate.end, candidate.start))
+    between = original_text[previous_span.end : span.start]
+    if between.strip():
+        return None
+    return previous_span
+
+
 def _component_alias_info_inside_full_alias(
     normalized: str,
     span: PHISpan,
@@ -446,6 +509,12 @@ def _provider_name_policy_metadata(
                 else "known_provider_alias"
             ),
             "name_role": "known_provider_alias",
+            "alias_match_type": policy,
+        }
+    if replacement_source == "project_provider_adjacent_action_word_veto":
+        return {
+            "project_name_policy": "provider_alias_adjacent_action_word_veto",
+            "name_role": "not_name_action_word",
             "alias_match_type": policy,
         }
     return {}

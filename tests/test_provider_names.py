@@ -186,6 +186,108 @@ def test_provider_trailing_action_rescue_requires_following_context():
     assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
+def test_provider_adjacent_action_span_preserves_lowercase_action_word():
+    note = "Nurse Taylor reviewed wound care."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-taylor": ["Taylor"]}
+    )
+    spans = [
+        _name_span(note, "Taylor", replacement="Alicia"),
+        _name_span(note, "reviewed", replacement="Clarke"),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert "Taylor" not in text
+    assert "Clarke wound care" not in text
+    assert "reviewed wound care" in text
+    assert final_spans[0].metadata["replacement_source"] == "project_stable_provider_name"
+    assert final_spans[1].metadata["replacement_source"] == (
+        "project_provider_adjacent_action_word_veto"
+    )
+    assert final_spans[1].metadata["project_name_policy"] == (
+        "provider_alias_adjacent_action_word_veto"
+    )
+    assert final_spans[1].metadata["name_role"] == "not_name_action_word"
+    assert final_spans[1].metadata["project_provider_action_word"] == "reviewed"
+    start = final_spans[1].metadata["project_replacement_start"]
+    end = final_spans[1].metadata["project_replacement_end"]
+    assert text[start:end] == "reviewed"
+
+
+def test_provider_adjacent_action_span_handles_assessed_symptoms():
+    note = "Nurse Patel assessed symptoms."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-patel": ["Patel"]}
+    )
+    spans = [
+        _name_span(note, "Patel", replacement="Fitzgerald"),
+        _name_span(note, "assessed", replacement="Johns"),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert "Patel" not in text
+    assert "Johns symptoms" not in text
+    assert "assessed symptoms" in text
+    assert final_spans[1].metadata["replacement_source"] == (
+        "project_provider_adjacent_action_word_veto"
+    )
+
+
+def test_provider_adjacent_action_span_requires_provider_alias_before_action():
+    note = "Nurse Taylor reviewed wound care."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-other": ["Morgan"]}
+    )
+    spans = [
+        _name_span(note, "Taylor", replacement="Alicia"),
+        _name_span(note, "reviewed", replacement="Clarke"),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert text == "Nurse Alicia Clarke wound care."
+    assert final_spans[1].metadata["replacement_source"] == "pyDeid"
+
+
+def test_provider_adjacent_action_span_does_not_preserve_without_following_context():
+    note = "Nurse Taylor reviewed."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-taylor": ["Taylor"]}
+    )
+    spans = [
+        _name_span(note, "Taylor", replacement="Alicia"),
+        _name_span(note, "reviewed", replacement="Clarke"),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert "Taylor" not in text
+    assert text.endswith("Clarke.")
+    assert final_spans[1].metadata["replacement_source"] == "pyDeid"
+
+
 def test_csv_provider_aliases_write_sanitized_audit_rows(tmp_path, monkeypatch):
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"

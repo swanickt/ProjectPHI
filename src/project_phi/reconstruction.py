@@ -23,7 +23,8 @@ Replacement priority:
 3. Preserve strict obstetric-history shorthand such as `G1P0A0`.
 4. Apply stable date shifting/preservation/fallback when date shifting is enabled.
 5. Apply stable patient-name aliases when patient alias replacement is enabled.
-6. Apply stable provider-name aliases when provider alias replacement is enabled.
+6. Apply stable provider-name aliases when provider alias replacement is enabled,
+   including narrow adjacent action-word rescue after explicit provider aliases.
 7. Preserve narrow ordinary-token false positives such as articles/pronouns.
 8. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
 9. Preserve narrow title-context action-word false positives.
@@ -70,7 +71,11 @@ from .date_shift import (
 )
 from .models import PHISpan
 from .patient_names import _name_policy_metadata, _project_patient_name_replacement
-from .provider_names import _project_provider_name_replacement, _provider_name_policy_metadata
+from .provider_names import (
+    _project_provider_adjacent_action_word_metadata,
+    _project_provider_name_replacement,
+    _provider_name_policy_metadata,
+)
 from .protected_terms import _protected_term_match, _protected_term_metadata
 from .title_context import (
     _title_context_action_word_match,
@@ -408,7 +413,9 @@ def _project_replacement_for_span(
 
     6. Stable provider-name policy:
        replace explicit provider aliases with deterministic fake provider
-       identities. Single-token aliases require provider-role context.
+       identities. Single-token aliases require provider-role context. A
+       lower-case action-word span immediately after an explicit provider alias
+       can be preserved when following context supports a clinical verb read.
 
     7. Ordinary-token veto:
        preserve selected articles, pronouns, and clinical shorthand that pyDeid
@@ -562,6 +569,21 @@ def _project_replacement_for_span(
                 else "project_stable_provider_name"
             )
             return replacement_text, replacement_source, match_type, {}
+
+        provider_action_match = _project_provider_adjacent_action_word_metadata(
+            span,
+            original_text=original_text,
+            spans=all_spans or [],
+            provider_alias_profile=provider_name_alias_profile,
+            provider_name_identities=provider_name_identities,
+        )
+        if provider_action_match is not None:
+            return (
+                span.text,
+                "project_provider_adjacent_action_word_veto",
+                provider_action_match["project_provider_action_policy"],
+                provider_action_match,
+            )
 
     ordinary_token_match = _ordinary_token_veto_metadata(span, original_text)
     if ordinary_token_match is not None:
