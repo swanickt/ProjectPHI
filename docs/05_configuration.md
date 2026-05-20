@@ -527,4 +527,4 @@ outputs.
 
 For detailed synthetic input/output examples covering single-note behavior,
 CSV row failures, stable replacement, protected terms, and custom regexes, see
-[Examples](09_examples.md).
+[Examples](08_examples.md).

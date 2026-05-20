@@ -31,7 +31,7 @@ growth.
 - [Semantic Preservation](07_semantic_preservation.md): date intervals, aliases,
   protected clinical terms, false-positive tradeoffs, external terminology
   source policy.
-- [Examples](09_examples.md): synthetic input/output/behavior examples for the
+- [Examples](08_examples.md): synthetic input/output/behavior examples for the
   note, CSV, stable replacement, custom regex, and protected-term workflows.
-- [Current Limitations](10_current_limitations.md): known behavior gaps,
+- [Current Limitations](09_current_limitations.md): known behavior gaps,
   reasons, and possible future mitigations.
