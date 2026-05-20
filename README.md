@@ -42,10 +42,12 @@ Key pages:
 - Stable patient-name surrogates for explicit patient aliases, including a
   bounded exact residual pass for supplied aliases that pyDeid prunes before
   ProjectPHI sees them.
+- Stable provider-name surrogates for explicit governed provider aliases,
+  including role-guarded residual matching for single-token aliases.
 - Protected clinical-term and narrow title/context false-positive vetoes for
   observed semantic-preservation failures.
-- Runtime config loaders for patient alias manifests, custom regex JSON, and
-  protected clinical terms CSV.
+- Runtime config loaders for patient alias manifests, provider alias manifests,
+  custom regex JSON, and protected clinical terms CSV.
 - Internal audit CSV output for span-level review.
 
 ## What It Does Not Do
@@ -177,7 +179,8 @@ stable replacement modes.
 
 More examples are in [docs/08_examples.md](docs/08_examples.md), including
 bulk CSV processing, stable date shifting, stable patient-name surrogates,
-custom regex pass-through, and protected clinical terms.
+stable provider-name surrogates, custom regex pass-through, and protected
+clinical terms.
 
 ## Tests
 
@@ -194,6 +197,9 @@ randomized surrogate values.
   project can safely parse.
 - Stable patient-name surrogates require explicit aliases and do not infer
   aliases, clinician names, family names, or other people from note text.
+- Stable provider-name surrogates require explicit provider aliases. They do
+  not detect unconfigured provider names, and single-token aliases require
+  provider-role context.
 - Custom regex support is a pyDeid pass-through mechanism; no real
   Sunnybrook/Ontario regex families are included at the moment.
 - Protected clinical terms are semantic-preservation vetoes, not compliance

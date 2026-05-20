@@ -8,14 +8,19 @@ The core workflow is pyDeid-first:
 note text
   -> pyDeid detection, pruning, and initial surrogate replacement
   -> project PHISpan normalization
+  -> optional exact residual spans for supplied patient/provider aliases
   -> optional project reconstruction from original-note offsets
   -> de-identified text candidate + structured span metadata
 ```
 
-ProjectPHI does not run a parallel detector. pyDeid remains responsible for
-finding and pruning PHI spans. Project code normalizes pyDeid output and applies
-selected post-pyDeid replacement policies when raw pyDeid behavior is not
-sufficient for longitudinal consistency or semantic preservation.
+ProjectPHI does not run a parallel detector for arbitrary PHI. pyDeid remains
+responsible for finding and pruning ordinary PHI spans. Project code normalizes
+pyDeid output and applies selected post-pyDeid replacement policies when raw
+pyDeid behavior is not sufficient for longitudinal consistency or semantic
+preservation. Stable patient-name and stable provider-name modes have bounded
+exceptions: supplied aliases can be exact-matched after pyDeid so aliases
+pruned by pyDeid can still receive stable identities. Provider single-token
+aliases require provider-role context.
 
 ## Module Layout
 
@@ -29,8 +34,11 @@ sufficient for longitudinal consistency or semantic preservation.
   project replacements or vetoes are active.
 - `src/project_phi/date_shift.py`: date-shift secret resolution, deterministic
   HMAC offset, and span-local date classifiers/parsers.
-- `src/project_phi/patient_names.py`: explicit alias handling and stable fake
-  patient identity generation.
+- `src/project_phi/patient_names.py`: explicit alias handling, bounded residual
+  alias span creation, and stable fake patient identity generation.
+- `src/project_phi/provider_names.py`: explicit provider-alias handling,
+  provider-role context checks, bounded residual provider-alias span creation,
+  and stable fake provider identity generation.
 - `src/project_phi/protected_terms.py`: span-local protected clinical
   terminology false-positive vetoes, including exact whole-span terms and
   context-bound components inside approved clinical phrases.
@@ -40,8 +48,8 @@ sufficient for longitudinal consistency or semantic preservation.
   conversion.
 - `src/project_phi/audit.py`: audit column order, span rows, and sanitized
   warning rows.
-- `src/project_phi/config_loaders.py`: alias manifest CSV, custom regex JSON,
-  and protected clinical terms CSV loaders.
+- `src/project_phi/config_loaders.py`: patient/provider alias manifest CSV,
+  custom regex JSON, and protected clinical terms CSV loaders.
 - `src/project_phi/cli.py`: minimal command-line wrapper around
   `deidentify_csv(...)`.
 - `src/project_phi/__init__.py`: public imports.
@@ -50,8 +58,11 @@ sufficient for longitudinal consistency or semantic preservation.
 
 `deidentify_note(...)` calls `run_pydeid_deid_string(...)`, which wraps pyDeid
 `deid_string(...)`. pyDeid returns surrogate records and pyDeid's own
-de-identified string. The wrapper normalizes those surrogate records; it does
-not redo pyDeid detection or pruning.
+de-identified string. The wrapper normalizes those surrogate records. It does
+not redo pyDeid detection or pruning for general PHI. When stable patient-name
+or stable provider-name surrogates are enabled, it may add synthetic residual
+spans for exact matches to supplied aliases. Provider single-token residual
+matches are limited to provider-role context.
 
 Surrogate records are pyDeid's table-like PHI records from `deid_string(...)`
 output. 
@@ -81,4 +92,3 @@ The code intentionally keeps three offset systems separate:
 - `metadata["project_replacement_start"]` /
   `metadata["project_replacement_end"]`: offsets in the project-final text
   when reconstruction is used.
-

@@ -1,8 +1,7 @@
 """Single-note ProjectPHI orchestration around pyDeid.
 
 This is the main public workflow. It wires together pyDeid detection/pruning,
-span normalization, and optional project-stable replacement without changing
-the public API surface.
+span normalization, and optional project-stable replacement.
 """
 
 from __future__ import annotations
@@ -24,6 +23,13 @@ from .patient_names import (
     _residual_patient_alias_spans,
     _resolve_patient_name_secret,
     _stable_patient_name_identity,
+)
+from .provider_names import (
+    _build_provider_alias_profile,
+    _merge_provider_alias_custom_names,
+    _residual_provider_alias_spans,
+    _resolve_provider_name_secret,
+    _stable_provider_name_identities,
 )
 from .protected_terms import _build_protected_terms_profile
 from .pydeid_client import DEFAULT_PYDEID_TYPES, run_pydeid_deid_string
@@ -51,6 +57,10 @@ def deidentify_note(
     patient_aliases: Iterable[str] | None = None,  # Explicit aliases for this patient.
     patient_name_secret: str | bytes | None = None,  # Direct patient-name secret.
     patient_name_secret_env_var: str | None = None,  # Env var containing name secret.
+    stable_provider_name_surrogates: bool = False,  # Enable explicit-provider aliases.
+    provider_aliases_by_provider_id: dict[str, Iterable[str]] | None = None,  # Provider aliases.
+    provider_name_secret: str | bytes | None = None,  # Direct provider-name secret.
+    provider_name_secret_env_var: str | None = None,  # Env var containing provider secret.
     custom_regexes=None,  # Project custom regex config to pass through pyDeid.
     protected_clinical_terms=None,  # Runtime protected-term false-positive vetoes.
     include_builtin_protected_clinical_terms: bool = True,  # Include small built-in term set.
@@ -67,8 +77,10 @@ def deidentify_note(
     - normalizes pyDeid surrogates into `PHISpan` records;
     - adds bounded residual spans for supplied patient aliases that pyDeid
       pruned when stable patient-name surrogates are enabled;
+    - adds role-guarded residual spans for supplied provider aliases that pyDeid
+      pruned when stable provider-name surrogates are enabled;
     - optionally reconstructs final text from original offsets for stable date
-      shifting, stable patient-name aliases, or protected clinical terms.
+      shifting, stable name aliases, or protected clinical terms.
 
     ID parameters are copied into result/span metadata for audit context.
     Secrets are used only to derive stable replacements and are not stored in
@@ -79,9 +91,11 @@ def deidentify_note(
     requested_types = list(types) if types is not None else list(DEFAULT_PYDEID_TYPES)
     if stable_date_shift and not _requested_types_include_dates(requested_types):
         raise ValueError("stable_date_shift=True requires pyDeid date detection in `types`.")
-    if stable_patient_name_surrogates and not _requested_types_include_names(requested_types):
+    if (
+        stable_patient_name_surrogates or stable_provider_name_surrogates
+    ) and not _requested_types_include_names(requested_types):
         raise ValueError(
-            "stable_patient_name_surrogates=True requires pyDeid name detection in `types`."
+            "stable name surrogate modes require pyDeid name detection in `types`."
         )
 
     date_shift_secret_bytes = None
@@ -115,6 +129,24 @@ def deidentify_note(
             custom_patient_last_names,
         )
 
+    provider_name_alias_profile = None
+    provider_name_identities = None
+    if stable_provider_name_surrogates:
+        provider_name_secret_bytes = _resolve_provider_name_secret(
+            provider_name_secret,
+            provider_name_secret_env_var,
+        )
+        provider_name_alias_profile = _build_provider_alias_profile(provider_aliases_by_provider_id)
+        provider_name_identities = _stable_provider_name_identities(
+            provider_name_alias_profile,
+            secret=provider_name_secret_bytes,
+        )
+        custom_dr_first_names, custom_dr_last_names = _merge_provider_alias_custom_names(
+            provider_name_alias_profile,
+            custom_dr_first_names,
+            custom_dr_last_names,
+        )
+
     pydeid_custom_regexes, custom_regex_metadata = _build_pydeid_custom_regexes(custom_regexes)
     protected_terms_profile = _build_protected_terms_profile(
         protected_clinical_terms,
@@ -131,6 +163,7 @@ def deidentify_note(
         "stable_date_shift": stable_date_shift,
         "date_shift_days": date_shift_days if stable_date_shift else None,
         "stable_patient_name_surrogates": stable_patient_name_surrogates,
+        "stable_provider_name_surrogates": stable_provider_name_surrogates,
         "custom_regex_rule_ids": [
             item["custom_regex_rule_id"] for item in custom_regex_metadata.values()
         ],
@@ -173,8 +206,24 @@ def deidentify_note(
                 note_id=note_id,
             )
         )
+    if stable_provider_name_surrogates:
+        spans.extend(
+            _residual_provider_alias_spans(
+                note_text,
+                provider_name_alias_profile,
+                spans,
+                patient_id=patient_id,
+                encounter_id=encounter_id,
+                note_id=note_id,
+            )
+        )
 
-    if stable_date_shift or stable_patient_name_surrogates or protected_terms_profile is not None:
+    if (
+        stable_date_shift
+        or stable_patient_name_surrogates
+        or stable_provider_name_surrogates
+        or protected_terms_profile is not None
+    ):
         deidentified_text, spans, reconstruction_warnings = _reconstruct_with_project_replacements(
             note_text,
             spans,
@@ -182,6 +231,8 @@ def deidentify_note(
             date_shift_days=date_shift_days,
             patient_name_alias_profile=patient_name_alias_profile,
             patient_name_identity=patient_name_identity,
+            provider_name_alias_profile=provider_name_alias_profile,
+            provider_name_identities=provider_name_identities,
             protected_terms_profile=protected_terms_profile,
         )
         warnings.extend(reconstruction_warnings)

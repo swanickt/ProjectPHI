@@ -1,19 +1,4 @@
-"""CLI tests for the CSV pipeline using synthetic inputs only.
-
-These tests cover the command-line wrapper around `deidentify_csv(...)`.
-
-Main contracts covered:
-- the CLI can run the basic CSV de-identification workflow;
-- stable date shifting uses a secret supplied through an environment variable;
-- stable patient-name surrogates load aliases from a manifest CSV;
-- custom regex JSON config is loaded without printing raw patterns;
-- protected clinical terms CSV config is loaded without printing term lists;
-- missing required flag combinations return a nonzero exit code;
-- CLI stdout/stderr contain sanitized counts/errors, not notes, aliases,
-  secrets, regex patterns, detected PHI, or raw config contents.
-
-These tests use synthetic notes, identifiers, aliases, and config files only.
-"""
+"""CLI tests for the existing CSV pipeline using synthetic inputs only."""
 
 import csv
 import json
@@ -23,27 +8,20 @@ from conftest import _read_csv, _write_csv
 
 
 def _write_alias_manifest(path, rows):
-    """Write a synthetic patient-alias manifest for CLI tests.
-
-    The manifest shape matches the runtime loader expectation:
-
-        patient_id,alias
-
-    Example row:
-        Patient/synth-cli-name-001,Zylanda Qorven
-    """
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["patient_id", "alias"])
         writer.writeheader()
         writer.writerows(rows)
 
 
-def _write_custom_regex_json(path):
-    """Write a synthetic custom-regex config for CLI tests.
+def _write_provider_manifest(path, rows):
+    with open(path, "w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["provider_id", "alias"])
+        writer.writeheader()
+        writer.writerows(rows)
 
-    The pattern matches fake accession-like values such as `SYN-ACC-1234`.
-    It is intentionally synthetic and should not appear in CLI output.
-    """
+
+def _write_custom_regex_json(path):
     path.write_text(
         json.dumps(
             {
@@ -59,12 +37,6 @@ def _write_custom_regex_json(path):
 
 
 def _write_protected_terms_csv(path):
-    """Write a synthetic protected-term CSV for CLI tests.
-
-    The term `oncotherapia` is fake clinical-looking text used to verify that
-    protected-term config can preserve a pyDeid-emitted span without printing
-    the configured term list to stdout/stderr.
-    """
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["rule_id", "category", "term"])
         writer.writeheader()
@@ -78,7 +50,6 @@ def _write_protected_terms_csv(path):
 
 
 def test_cli_minimal_csv_deidentification(tmp_path, capsys):
-    """The CLI de-identifies a CSV and prints sanitized summary counts."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     _write_csv(
@@ -105,7 +76,6 @@ def test_cli_minimal_csv_deidentification(tmp_path, capsys):
 
 
 def test_cli_stable_date_shift_uses_env_var_secret(tmp_path, monkeypatch, capsys):
-    """Stable date shifting uses an env-var secret name without printing the secret."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     monkeypatch.setenv("PROJECT_PHI_TEST_CLI_DATE_SECRET", "synthetic-date-secret")
@@ -139,7 +109,6 @@ def test_cli_stable_date_shift_uses_env_var_secret(tmp_path, monkeypatch, capsys
 
 
 def test_cli_stable_patient_name_surrogates_load_alias_manifest(tmp_path, monkeypatch, capsys):
-    """Stable patient-name mode loads aliases from CSV without printing aliases or secrets."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     manifest = tmp_path / "aliases.csv"
@@ -181,11 +150,55 @@ def test_cli_stable_patient_name_surrogates_load_alias_manifest(tmp_path, monkey
     assert "synthetic-name-secret" not in captured.out
 
 
+def test_cli_stable_provider_name_surrogates_load_provider_manifest(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    manifest = tmp_path / "providers.csv"
+    monkeypatch.setenv("PROJECT_PHI_TEST_CLI_PROVIDER_SECRET", "synthetic-provider-secret")
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-cli-provider-001",
+                "note_id": "Note/synth-cli-provider-001",
+                "note_text": "Radiologist Chen reviewed mammography.",
+            }
+        ],
+    )
+    _write_provider_manifest(
+        manifest,
+        [{"provider_id": "Provider/synth-cli-chen", "alias": "Chen"}],
+    )
+
+    exit_code = main(
+        [
+            str(input_file),
+            str(output_file),
+            "--stable-provider-name-surrogates",
+            "--provider-alias-manifest",
+            str(manifest),
+            "--provider-name-secret-env-var",
+            "PROJECT_PHI_TEST_CLI_PROVIDER_SECRET",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    output_rows = _read_csv(output_file)
+    assert exit_code == 0
+    assert "Radiologist Chen" not in output_rows[0]["note_text"]
+    assert "Radiologist " in output_rows[0]["note_text"]
+    assert "Chen" not in captured.out
+    assert "synthetic-provider-secret" not in captured.out
+
+
 def test_cli_custom_regex_json_removes_synthetic_identifier_without_printing_config(
     tmp_path,
     capsys,
 ):
-    """Custom regex config removes a synthetic identifier without printing config details."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     config = tmp_path / "custom_regexes.json"
@@ -224,7 +237,6 @@ def test_cli_protected_clinical_terms_csv_preserves_term_without_printing_config
     tmp_path,
     capsys,
 ):
-    """Protected-term CSV config preserves a term without printing the configured term."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     config = tmp_path / "protected_terms.csv"
@@ -259,7 +271,6 @@ def test_cli_protected_clinical_terms_csv_preserves_term_without_printing_config
 
 
 def test_cli_missing_required_stable_config_returns_nonzero_and_sanitized(capsys, tmp_path):
-    """Missing required stable-name flags fail without printing row note contents."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     _write_csv(
@@ -281,3 +292,26 @@ def test_cli_missing_required_stable_config_returns_nonzero_and_sanitized(capsys
     assert "Zylanda" not in captured.err
     assert "Qorven" not in captured.err
     assert "Patient Zylanda Qorven" not in captured.out
+
+
+def test_cli_missing_provider_manifest_returns_nonzero_and_sanitized(capsys, tmp_path):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-cli-provider-error-001",
+                "note_id": "Note/synth-cli-provider-error-001",
+                "note_text": "Radiologist Chen reviewed mammography.",
+            }
+        ],
+    )
+
+    exit_code = main([str(input_file), str(output_file), "--stable-provider-name-surrogates"])
+
+    captured = capsys.readouterr()
+    assert exit_code != 0
+    assert "--provider-alias-manifest" in captured.err
+    assert "Chen" not in captured.err
+    assert "Radiologist Chen" not in captured.out

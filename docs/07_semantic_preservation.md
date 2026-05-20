@@ -75,11 +75,35 @@ the row fails through the sanitized row-failure path. If stable patient-name
 surrogates are disabled, pyDeid still replaces names, but those replacements may
 not be stable across notes for the same patient.
 
+When aliases are supplied, ProjectPHI uses pyDeid name detection where possible
+and then performs a bounded exact residual pass for supplied aliases that pyDeid
+missed or pruned. This improves recall for governed patient alias manifests
+without turning the wrapper into a general person-name detector. Unknown names,
+clinician names, family names, copied-correspondence names, facilities, and
+organizations are not inferred as patient aliases.
+
 For explicit patient aliases, the project uses a deterministic Faker-generated
 fake identity keyed by `patient_id` and a runtime secret. The replacement is
 role-preserving but not gender-concordant: the wrapper does not infer gender
 from breast oncology context, names, pronouns, or diagnosis because that would
 add an unvalidated inference layer and can create incorrect assumptions.
+
+## Provider Name Semantics
+
+Stable provider-name surrogates require explicit provider aliases from governed
+runtime configuration. The wrapper does not infer provider aliases from notes,
+provider-role words, signatures, copied correspondence, or name-like tokens.
+
+When provider aliases are supplied, ProjectPHI uses pyDeid name detection where
+possible and then performs a bounded exact residual pass for configured aliases
+that pyDeid missed or pruned. Full aliases can match exactly. Single-token
+aliases require local provider-role context, such as `Radiologist Chen`,
+`Social worker Green`, or an adjacent `MD` marker, so configured names that are
+also ordinary words are not replaced globally.
+
+Provider replacements use deterministic fake identities keyed by `provider_id`
+and a runtime secret. Unknown names and unconfigured provider names remain
+pyDeid behavior.
 
 ## Protected Clinical Terms
 
@@ -129,8 +153,8 @@ radiologist, pathologist, pharmacist, physiotherapist, and social worker.
 
 The veto only applies to pyDeid-emitted title-derived `NAME` spans. It requires
 an exact match to a curated clinical/documentation action-word list, a narrow
-`Dr.` or clinical-role context, no explicit custom/patient alias, and absence
-from pyDeid name lists. Lower-case action words use the base `Dr.` rule.
+`Dr.` or clinical-role context, no explicit custom patient/provider alias, and
+absence from pyDeid name lists. Lower-case action words use the base `Dr.` rule.
 Capitalized action words are preserved only when specific clinical-object
 context follows, such as `mammography`, `chest wall`, `skin toxicity`, or
 `stable disease`, or when generic patient/person context follows, such as
@@ -144,8 +168,8 @@ replaced role/title name span, such as preserving `reviewed` in
 A separate, narrower title-token-fragment veto preserves non-identifying `Dr.`
 fragments when pyDeid splits the title token itself into name spans, for
 example after `family physician`. This keeps text such as
-`family physician Dr. <name surrogate>` readable while the clinician name still
-uses pyDeid replacement.
+`family physician Dr. <name surrogate>` readable while the clinician name uses
+pyDeid replacement unless an explicit stable provider-name policy applies.
 
 This prioritizes semantic preservation for common documentation verbs while
 keeping pyDeid replacement as the fallback in ambiguous cases.

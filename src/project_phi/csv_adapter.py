@@ -1,51 +1,7 @@
-"""CSV adapter around the single-note ProjectPHI workflow.
+"""CSV adapter around the single-note de-identification wrapper.
 
-This module deliberately does not call pyDeid's CSV workflow. Instead, it reads
-the input CSV row by row and applies `deidentify_note(...)` to one configured
-note-text column.
-
-This keeps CSV processing thin and lets ProjectPHI preserve:
-- normalized `PHISpan` metadata;
-- project replacement metadata;
-- sanitized warning behavior;
-- optional audit CSV output.
-
-Behavior summary:
-- input, output, and audit paths must be distinct;
-- the configured note-text column is required;
-- only the note-text column is replaced in successful output rows;
-- all other input columns and row order are preserved for successful rows;
-- failed rows are omitted from the de-identified output;
-- failures and note-level warnings are reported with sanitized context only.
-
-Example:
-    summary = deidentify_csv(
-        "input.csv",
-        "deidentified.csv",
-        audit_output_file="audit.csv",
-        note_text_column="note_text",
-        patient_id_column="patient_id",
-        stable_date_shift=True,
-        date_shift_secret_env_var="PROJECTPHI_DATE_SHIFT_SECRET",
-    )
-
-Stable patient-name example:
-    summary = deidentify_csv(
-        "input.csv",
-        "deidentified.csv",
-        patient_id_column="patient_id",
-        stable_patient_name_surrogates=True,
-        patient_aliases_by_patient_id={
-            "P001": ["Jane Smith", "Jane", "Ms Smith"],
-            "P002": ["Robert Chen", "Mr Chen"],
-        },
-        patient_name_secret_env_var="PROJECTPHI_PATIENT_NAME_SECRET",
-    )
-
-Audit notes:
-- audit rows include offsets, replacements, and policy metadata;
-- audit rows do not include raw note text or raw detected `PHISpan.text`;
-- audit CSVs are internal review artifacts, not de-identified training outputs.
+This module deliberately does not call pyDeid's CSV workflow. Keeping CSV
+processing as a thin row loop preserves project span metadata and audit policy.
 """
 
 from __future__ import annotations
@@ -64,143 +20,62 @@ from .note import deidentify_note
 
 
 def deidentify_csv(
-    input_file,
-    output_file,
+    input_file,  # Input CSV path or path-like object.
+    output_file,  # De-identified output CSV path or path-like object.
     *,
-    audit_output_file=None,
-    note_text_column="note_text",
-    patient_id_column="patient_id",
-    encounter_id_column="encounter_id",
-    note_id_column="note_id",
-    types=None,
-    custom_dr_first_names=None,
-    custom_dr_last_names=None,
-    custom_patient_first_names=None,
-    custom_patient_last_names=None,
-    encoding="utf-8",
-    stable_date_shift: bool = False,
-    date_shift_secret: str | bytes | None = None,
-    date_shift_secret_env_var: str | None = None,
-    date_shift_days: int = 45,
-    stable_patient_name_surrogates: bool = False,
-    patient_aliases_by_patient_id: dict[str, Iterable[str]] | None = None,
-    patient_name_secret: str | bytes | None = None,
-    patient_name_secret_env_var: str | None = None,
-    custom_regexes=None,
-    protected_clinical_terms=None,
-    include_builtin_protected_clinical_terms: bool = True,
+    audit_output_file=None,  # Optional internal audit CSV path.
+    note_text_column="note_text",  # Column containing note text to replace.
+    patient_id_column="patient_id",  # Optional patient ID column name.
+    encounter_id_column="encounter_id",  # Optional encounter ID column name.
+    note_id_column="note_id",  # Optional note ID column name.
+    types=None,  # pyDeid PHI categories to request per row.
+    custom_dr_first_names=None,  # Extra doctor first names for pyDeid.
+    custom_dr_last_names=None,  # Extra doctor last names for pyDeid.
+    custom_patient_first_names=None,  # Extra patient first names for pyDeid.
+    custom_patient_last_names=None,  # Extra patient last names for pyDeid.
+    encoding="utf-8",  # CSV file encoding.
+    stable_date_shift: bool = False,  # Enable project HMAC date replacement.
+    date_shift_secret: str | bytes | None = None,  # Direct date-shift secret.
+    date_shift_secret_env_var: str | None = None,  # Env var containing date secret.
+    date_shift_days: int = 45,  # Inclusive +/- date shift range.
+    stable_patient_name_surrogates: bool = False,  # Enable explicit-alias patient names.
+    patient_aliases_by_patient_id: dict[str, Iterable[str]] | None = None,  # Row alias lookup.
+    patient_name_secret: str | bytes | None = None,  # Direct patient-name secret.
+    patient_name_secret_env_var: str | None = None,  # Env var containing name secret.
+    stable_provider_name_surrogates: bool = False,  # Enable explicit-provider aliases.
+    provider_aliases_by_provider_id: dict[str, Iterable[str]] | None = None,  # Provider aliases.
+    provider_name_secret: str | bytes | None = None,  # Direct provider-name secret.
+    provider_name_secret_env_var: str | None = None,  # Env var containing provider secret.
+    custom_regexes=None,  # Project custom regex config passed to pyDeid.
+    protected_clinical_terms=None,  # Runtime protected-term false-positive vetoes.
+    include_builtin_protected_clinical_terms: bool = True,  # Include built-in term set.
 ):
     """De-identify a CSV by applying `deidentify_note(...)` row by row.
 
-    The configured note-text column is replaced with the final de-identified
-    text for successful rows. All other columns are copied unchanged. Rows that
-    fail are omitted from the output CSV and recorded in the returned summary
-    and optional audit CSV.
+    Parameters are intentionally close to the single-note API. File path values
+    may be strings or path-like objects. The configured note text column is the
+    only data column replaced for successful rows; all other input columns and
+    row order are preserved.
 
-    Args:
-        input_file: Input CSV path or path-like object.
-        output_file: Output CSV path or path-like object for de-identified rows.
-        audit_output_file: Optional audit CSV path. When provided, one audit row
-            is written per emitted span, plus warning-only rows for row failures
-            and note-level warnings.
-        note_text_column: Name of the CSV column containing note text to
-            de-identify. This column must exist.
-        patient_id_column: Optional patient ID column name. If the column exists,
-            its value is passed to `deidentify_note(...)` and copied into span
-            metadata.
-        encounter_id_column: Optional encounter ID column name. If the column
-            exists, its value is passed through as metadata.
-        note_id_column: Optional note ID column name. If the column exists, its
-            value is passed through as metadata.
-        types: pyDeid PHI categories to request for each row.
-        custom_dr_first_names: Extra doctor first-name tokens passed to pyDeid.
-        custom_dr_last_names: Extra doctor last-name tokens passed to pyDeid.
-        custom_patient_first_names: Extra patient first-name tokens passed to
-            pyDeid.
-        custom_patient_last_names: Extra patient last-name tokens passed to
-            pyDeid.
-        encoding: File encoding used for input, output, and audit CSV files.
-        stable_date_shift: Whether to enable deterministic per-patient date
-            shifting.
-        date_shift_secret: Direct secret for date shifting. Useful for tests;
-            environment variables are preferred for runtime use.
-        date_shift_secret_env_var: Environment variable containing the date-shift
-            secret. Used only when `date_shift_secret` is not provided.
-        date_shift_days: Inclusive maximum date-shift range. For example, `45`
-            maps each patient to an offset in `[-45, +45]`.
-        stable_patient_name_surrogates: Whether explicitly configured patient
-            aliases should receive deterministic fake patient names.
-        patient_aliases_by_patient_id: Mapping from patient ID to explicit
-            aliases for that patient. Required when stable patient-name
-            surrogates are enabled.
-        patient_name_secret: Direct secret for stable patient-name generation.
-            Useful for tests; environment variables are preferred for runtime use.
-        patient_name_secret_env_var: Environment variable containing the
-            patient-name secret. Used only when `patient_name_secret` is not
-            provided.
-        custom_regexes: ProjectPHI custom regex config. ProjectPHI validates and
-            converts this config, while pyDeid performs the actual matching.
-        protected_clinical_terms: Runtime protected-term config used as a
-            span-local false-positive veto.
-        include_builtin_protected_clinical_terms: Whether to include the curated
-            built-in protected clinical terminology list.
+    Failure behavior:
+    - the input, output, and optional audit paths must be distinct;
+    - the note text column is validated before row processing;
+    - failed rows are omitted from de-identified output;
+    - row failures increment `rows_failed` and produce sanitized warning text;
+    - arbitrary exception messages are not copied into summary/audit output.
 
-    Returns:
-        Summary dictionary with:
-        - `rows_read`: number of input data rows processed;
-        - `rows_written`: number of successful rows written to output;
-        - `rows_failed`: number of failed rows omitted from output;
-        - `spans_written`: number of span audit rows written;
-        - `warnings`: sanitized row-failure and row-warning messages.
+    Audit behavior:
+    - when `audit_output_file` is provided, one audit row is written per span;
+    - warning-only audit rows are written for row failures/warnings;
+    - audit rows omit raw note text and raw detected `span.text` by default.
 
-    Raises:
-        ValueError: If input/output/audit paths overlap, if the note-text column
-            is missing, or if required row-level stable patient-name inputs are
-            missing.
-
-    Examples:
-        Basic CSV de-identification:
-            summary = deidentify_csv(
-                "notes.csv",
-                "notes_deidentified.csv",
-                note_text_column="note_text",
-            )
-
-        With audit output:
-            summary = deidentify_csv(
-                "notes.csv",
-                "notes_deidentified.csv",
-                audit_output_file="notes_audit.csv",
-            )
-
-        With stable date shifting:
-            summary = deidentify_csv(
-                "notes.csv",
-                "notes_deidentified.csv",
-                patient_id_column="patient_id",
-                stable_date_shift=True,
-                date_shift_secret_env_var="PROJECTPHI_DATE_SHIFT_SECRET",
-                date_shift_days=45,
-            )
-
-        With stable patient-name aliases:
-            summary = deidentify_csv(
-                "notes.csv",
-                "notes_deidentified.csv",
-                patient_id_column="patient_id",
-                stable_patient_name_surrogates=True,
-                patient_aliases_by_patient_id={
-                    "P001": ["Jane Smith", "Jane", "Ms Smith"],
-                },
-                patient_name_secret_env_var="PROJECTPHI_PATIENT_NAME_SECRET",
-            )
+    Returns a summary dictionary with `rows_read`, `rows_written`,
+    `rows_failed`, `spans_written`, and `warnings`.
     """
     input_path = Path(input_file)
     output_path = Path(output_file)
     resolved_input_path = input_path.resolve()
     resolved_output_path = output_path.resolve()
-    # Avoid reading and writing the same file. This prevents accidental
-    # destruction of the source CSV and keeps audit output separate.
     if resolved_input_path == resolved_output_path:
         raise ValueError("input_file and output_file must not be the same path.")
     if audit_output_file is not None:
@@ -210,8 +85,6 @@ def deidentify_csv(
         if resolved_audit_path == resolved_output_path:
             raise ValueError("audit_output_file and output_file must not be the same path.")
 
-    # The summary intentionally stores counts plus sanitized warning strings
-    # only. It should not contain raw note text or arbitrary exception messages.
     summary = {
         "rows_read": 0,
         "rows_written": 0,
@@ -224,8 +97,6 @@ def deidentify_csv(
     audit_writer = None
 
     try:
-        # Create the audit file first when requested so span/warning rows can be
-        # streamed as each input row is processed.
         if audit_output_file is not None:
             audit_handle = open(audit_output_file, "w", newline="", encoding=encoding)
             audit_writer = csv.DictWriter(audit_handle, fieldnames=AUDIT_COLUMNS)
@@ -234,8 +105,6 @@ def deidentify_csv(
         with open(input_path, newline="", encoding=encoding) as input_handle:
             reader = csv.DictReader(input_handle)
             fieldnames = reader.fieldnames or []
-            # Validate the required note-text column before writing output rows.
-            # Optional ID columns are read only when present.
             if note_text_column not in fieldnames:
                 raise ValueError(
                     f"Required note text column {note_text_column!r} not found in input CSV."
@@ -252,9 +121,6 @@ def deidentify_csv(
                     note_id = _optional_row_value(row, fieldnames, note_id_column)
 
                     try:
-                        # Resolve row-specific aliases before calling the single-note
-                        # workflow. Missing aliases fail this row rather than causing
-                        # guessed patient-name replacement.
                         patient_aliases = _patient_aliases_for_row(
                             patient_id,
                             patient_aliases_by_patient_id,
@@ -280,6 +146,10 @@ def deidentify_csv(
                             patient_aliases=patient_aliases,
                             patient_name_secret=patient_name_secret,
                             patient_name_secret_env_var=patient_name_secret_env_var,
+                            stable_provider_name_surrogates=stable_provider_name_surrogates,
+                            provider_aliases_by_provider_id=provider_aliases_by_provider_id,
+                            provider_name_secret=provider_name_secret,
+                            provider_name_secret_env_var=provider_name_secret_env_var,
                             custom_regexes=custom_regexes,
                             protected_clinical_terms=protected_clinical_terms,
                             include_builtin_protected_clinical_terms=(
@@ -287,9 +157,8 @@ def deidentify_csv(
                             ),
                         )
                     except Exception as exc:
-                        # Omit failed rows and emit sanitized context only. Do
-                        # not copy raw notes or arbitrary exception text into
-                        # the output summary or audit CSV.
+                        # Omit failed rows and emit sanitized context only. Raw
+                        # notes or arbitrary exception text must not enter audit.
                         summary["rows_failed"] += 1
                         warning = _format_row_warning(
                             "Row failed",
@@ -310,15 +179,11 @@ def deidentify_csv(
                             )
                         continue
 
-                    # Preserve the original row shape and replace only the
-                    # configured note-text column.
                     output_row = dict(row)
                     output_row[note_text_column] = result.deidentified_text
                     writer.writerow(output_row)
                     summary["rows_written"] += 1
 
-                    # Audit rows are internal review artifacts. They include offsets and
-                    # replacement metadata, but not raw span text.
                     if audit_writer is not None:
                         for span_index, span in enumerate(result.spans):
                             audit_writer.writerow(_span_to_audit_row(span, span_index))
@@ -352,23 +217,11 @@ def deidentify_csv(
 
 
 def _optional_row_value(
-    row: dict[str, Any],
-    fieldnames: list[str],
-    column: str,
+    row: dict[str, Any],  # Current CSV row.
+    fieldnames: list[str],  # Input CSV header names.
+    column: str,  # Optional column to read.
 ) -> str | None:
-    """Return a row value only when the optional column exists.
-
-    Optional ID columns are not required in every CSV. When the configured
-    column is absent from the header, this returns `None` instead of failing.
-
-    Args:
-        row: Current CSV row from `csv.DictReader`.
-        fieldnames: Input CSV header names.
-        column: Optional column name to read.
-
-    Returns:
-        The row value when the column exists, otherwise `None`.
-    """
+    """Return a configured optional ID column value only when the column exists."""
     if column in fieldnames:
         return row.get(column)
     return None
@@ -380,34 +233,12 @@ def _patient_aliases_for_row(
     *,
     stable_patient_name_surrogates: bool,  # Whether aliases are required.
 ) -> Iterable[str] | None:
-    """Return explicit aliases for one row's patient-name policy.
+    """Select row-specific aliases for stable patient-name replacement.
 
     Stable patient-name surrogates require explicit aliases keyed by the row's
-    patient ID. Missing IDs or aliases raise `ValueError`, which the CSV loop
-    handles as a sanitized row failure. The affected row is omitted rather than
-    processed with guessed patient-name identity.
-
-    Args:
-        patient_id: Patient ID from the current row, if available.
-        patient_aliases_by_patient_id: Mapping from patient ID to explicit
-            aliases for that patient.
-        stable_patient_name_surrogates: Whether row aliases are required.
-
-    Returns:
-        Aliases for the row's patient, or `None` when stable patient-name
-        surrogates are disabled.
-
-    Raises:
-        ValueError: If stable patient-name surrogates are enabled but the row has
-            no patient ID, no alias mapping, or no aliases for that patient.
-
-    Example:
-        patient_aliases_by_patient_id = {
-            "P001": ["Jane Smith", "Jane", "Ms Smith"],
-        }
-
-        A row with `patient_id == "P001"` receives those aliases. A row with
-        `patient_id == "P999"` fails instead of guessing aliases.
+    `patient_id`. Missing IDs or aliases fail through the normal row-failure
+    path so the affected row is omitted rather than processed with guessed
+    patient-name identity.
     """
     if not stable_patient_name_surrogates:
         return None

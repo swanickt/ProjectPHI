@@ -1,48 +1,9 @@
 """Minimal command-line interface for CSV de-identification.
 
 The CLI is a thin adapter around `deidentify_csv(...)`. It loads small runtime
-config files, validates required flag combinations, runs the CSV pipeline, and
-prints sanitized summary counts/warnings.
-
-It deliberately does not:
-- call pyDeid directly;
-- accept direct secret values on the command line;
-- print notes, aliases, regex patterns, detected PHI, or arbitrary exception text.
-
-Secrets must be supplied through environment variables and referenced by name
-with CLI flags.
-
-Examples:
-    Basic CSV de-identification:
-        project-phi-deid input.csv output.csv
-
-    With audit output:
-        project-phi-deid input.csv output.csv \\
-            --audit-output-file audit.csv
-
-    With stable date shifting:
-        export PROJECTPHI_DATE_SHIFT_SECRET="runtime-secret"
-        project-phi-deid input.csv output.csv \\
-            --stable-date-shift \\
-            --date-shift-secret-env-var PROJECTPHI_DATE_SHIFT_SECRET
-
-    With stable patient-name aliases:
-        export PROJECTPHI_PATIENT_NAME_SECRET="runtime-secret"
-        project-phi-deid input.csv output.csv \\
-            --stable-patient-name-surrogates \\
-            --patient-alias-manifest aliases.csv \\
-            --patient-name-secret-env-var PROJECTPHI_PATIENT_NAME_SECRET
-
-    With custom regexes and protected terms:
-        project-phi-deid input.csv output.csv \\
-            --custom-regex-json custom_regexes.json \\
-            --protected-clinical-terms-csv protected_terms.csv
-
-Exit codes:
-    0: CLI ran successfully, even if some CSV rows failed and were reported in
-       the sanitized summary.
-    2: argument/config/file error.
-    1: unexpected de-identification failure.
+config files, validates required flag combinations, and prints only sanitized
+summary counts/warnings. It does not accept direct secret values on the command
+line and does not print notes, aliases, regex patterns, or detected PHI.
 """
 
 from __future__ import annotations
@@ -53,34 +14,21 @@ import sys
 from .config_loaders import (
     load_custom_regexes_json,
     load_patient_alias_manifest,
+    load_provider_alias_manifest,
     load_protected_clinical_terms_csv,
 )
 from .csv_adapter import deidentify_csv
 
 
 def main(
-    argv: list[str] | None = None,
+    argv: list[str] | None = None,  # Optional argv override for tests.
 ) -> int:
     """Run the CLI and return a process-style exit code.
 
-    Args:
-        argv: Optional argument list for tests. When `None`, argparse reads from
-            `sys.argv`.
-
-    Returns:
-        Process-style exit code:
-        - `0` for successful CLI execution;
-        - `2` for argument, config-loading, or file-operation errors;
-        - `1` for unexpected de-identification failures.
-
-    Notes:
-        Row-level de-identification failures are reported in the returned
-        summary from `deidentify_csv(...)`. They do not make the CLI exit
-        nonzero by themselves, because the CSV adapter may still write successful
-        rows and warning-only audit rows.
+    `argv` is injectable for tests. Row-level de-identification failures remain
+    part of the returned summary and do not make the CLI exit nonzero; argument,
+    config-loading, and file-operation failures return nonzero codes.
     """
-    # Validate flag combinations before loading files or running de-identification.
-    # The CLI accepts environment variable names for secrets, not secret values.
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -90,9 +38,11 @@ def main(
         return _argument_error("--stable-patient-name-surrogates requires --patient-alias-manifest")
     if args.stable_patient_name_surrogates and not args.patient_name_secret_env_var:
         return _argument_error("--stable-patient-name-surrogates requires --patient-name-secret-env-var")
+    if args.stable_provider_name_surrogates and not args.provider_alias_manifest:
+        return _argument_error("--stable-provider-name-surrogates requires --provider-alias-manifest")
+    if args.stable_provider_name_surrogates and not args.provider_name_secret_env_var:
+        return _argument_error("--stable-provider-name-surrogates requires --provider-name-secret-env-var")
 
-    # Load optional config files into the in-memory shapes expected by
-    # `deidentify_csv(...)`. Loaders validate shape but do not scan notes.
     try:
         patient_aliases_by_patient_id = (
             load_patient_alias_manifest(args.patient_alias_manifest, encoding=args.encoding)
@@ -112,6 +62,11 @@ def main(
             if args.protected_clinical_terms_csv
             else None
         )
+        provider_aliases_by_provider_id = (
+            load_provider_alias_manifest(args.provider_alias_manifest, encoding=args.encoding)
+            if args.provider_alias_manifest
+            else None
+        )
         summary = deidentify_csv(
             args.input_csv,
             args.output_csv,
@@ -127,11 +82,12 @@ def main(
             stable_patient_name_surrogates=args.stable_patient_name_surrogates,
             patient_aliases_by_patient_id=patient_aliases_by_patient_id,
             patient_name_secret_env_var=args.patient_name_secret_env_var,
+            stable_provider_name_surrogates=args.stable_provider_name_surrogates,
+            provider_aliases_by_provider_id=provider_aliases_by_provider_id,
+            provider_name_secret_env_var=args.provider_name_secret_env_var,
             custom_regexes=custom_regexes,
             protected_clinical_terms=protected_clinical_terms,
         )
-    # Keep error messages sanitized. ValueError messages from project
-    # validators are written to be safe; arbitrary exception text is not.
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
@@ -149,27 +105,7 @@ def main(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Create the CLI argument parser.
-
-    This function only defines flags. It does not read files, inspect
-    environment variables, or run de-identification.
-
-    Positional arguments:
-        input_csv: Source CSV file.
-        output_csv: Destination CSV file for successful de-identified rows.
-
-    Important flags:
-        --audit-output-file: Optional internal audit CSV path.
-        --note-text-column: Input column containing note text. Defaults to
-            `note_text`.
-        --stable-date-shift: Enables deterministic per-patient date shifting.
-            Requires `--date-shift-secret-env-var`.
-        --stable-patient-name-surrogates: Enables deterministic fake patient
-            names for explicit aliases. Requires `--patient-alias-manifest` and
-            `--patient-name-secret-env-var`.
-        --custom-regex-json: Optional ProjectPHI custom regex config.
-        --protected-clinical-terms-csv: Optional protected clinical term config.
-    """
+    """Create the argument parser without reading files or environment values."""
     parser = argparse.ArgumentParser(
         prog="project-phi-deid",
         description="Run the ProjectPHI CSV de-identification pipeline.",
@@ -187,6 +123,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stable-patient-name-surrogates", action="store_true")
     parser.add_argument("--patient-alias-manifest")
     parser.add_argument("--patient-name-secret-env-var")
+    parser.add_argument("--stable-provider-name-surrogates", action="store_true")
+    parser.add_argument("--provider-alias-manifest")
+    parser.add_argument("--provider-name-secret-env-var")
     parser.add_argument("--custom-regex-json")
     parser.add_argument("--protected-clinical-terms-csv")
     parser.add_argument("--encoding", default="utf-8")
@@ -194,23 +133,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _print_summary(
-    summary: dict,
+    summary: dict,  # Sanitized deidentify_csv summary dictionary.
 ) -> None:
-    """Print sanitized CSV pipeline summary output.
-
-    Printed fields:
-        rows_read: Number of input data rows processed.
-        rows_written: Number of successful rows written to output.
-        rows_failed: Number of failed rows omitted from output.
-        spans_written: Number of span audit rows written.
-        warnings: Count of sanitized warnings.
-        warning: One line per sanitized warning.
-
-    Notes:
-        The summary should contain counts and sanitized warning strings only. It
-        should not include raw note text, detected PHI, aliases, regex patterns,
-        secrets, hashes, or arbitrary exception messages.
-    """
+    """Print sanitized summary counts and already-sanitized row warnings."""
     print(f"rows_read={summary.get('rows_read', 0)}")
     print(f"rows_written={summary.get('rows_written', 0)}")
     print(f"rows_failed={summary.get('rows_failed', 0)}")
@@ -222,17 +147,9 @@ def _print_summary(
 
 
 def _argument_error(
-    message: str,
+    message: str,  # Sanitized CLI validation message.
 ) -> int:
-    """Print a sanitized CLI argument error and return exit code 2.
-
-    Args:
-        message: Static/sanitized validation message. It should not contain raw
-            note text, config contents, secrets, regex patterns, or PHI.
-
-    Returns:
-        `2`, matching common CLI usage/configuration error behavior.
-    """
+    """Print a sanitized argument error and return the CLI usage-error code."""
     print(f"Error: {message}", file=sys.stderr)
     return 2
 

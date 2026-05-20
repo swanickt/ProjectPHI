@@ -52,6 +52,42 @@ def load_patient_alias_manifest(
     return aliases_by_patient_id
 
 
+def load_provider_alias_manifest(
+    path,  # CSV path with provider_id,alias columns.
+    *,
+    encoding="utf-8",  # File encoding for the manifest.
+) -> dict[str, list[str]]:
+    """Load `provider_id,alias` CSV into the provider alias mapping.
+
+    The loader preserves alias order per provider and performs only shape
+    validation. It does not infer aliases, validate real provider identities, or
+    echo raw aliases in validation errors.
+    """
+    aliases_by_provider_id: dict[str, list[str]] = {}
+    with open(Path(path), newline="", encoding=encoding) as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = reader.fieldnames or []
+        required_columns = {"provider_id", "alias"}
+        missing_columns = sorted(required_columns.difference(fieldnames))
+        if missing_columns:
+            raise ValueError("Provider alias manifest is missing required columns.")
+
+        for row_number, row in enumerate(reader, start=2):
+            if _blank_csv_row(row):
+                continue
+            provider_id = (row.get("provider_id") or "").strip()
+            alias = (row.get("alias") or "").strip()
+            if not provider_id:
+                raise ValueError(
+                    f"Provider alias manifest row {row_number} has an empty provider_id."
+                )
+            if not alias:
+                raise ValueError(f"Provider alias manifest row {row_number} has an empty alias.")
+            aliases_by_provider_id.setdefault(provider_id, []).append(alias)
+
+    return aliases_by_provider_id
+
+
 def load_custom_regexes_json(
     path,  # JSON path containing project custom regex config.
     *,

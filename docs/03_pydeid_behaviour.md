@@ -37,9 +37,11 @@ parameters including:
 - `**custom_regexes`.
 
 ProjectPHI currently passes through the custom doctor/patient name sets,
-`types`, and pyDeid custom regex objects. It always calls pyDeid with
-`named_entity_recognition=False`. The pyDeid date-year threshold parameters are
-left at pyDeid defaults because the public wrapper does not currently expose them.
+including provider aliases merged into pyDeid doctor-name lists when stable
+provider-name surrogates are enabled. It also passes `types` and pyDeid custom
+regex objects. It always calls pyDeid with `named_entity_recognition=False`.
+The pyDeid date-year threshold parameters are left at pyDeid defaults because
+the public wrapper does not currently expose them.
 
 The default pyDeid `types` requested by the wrapper are:
 
@@ -107,9 +109,10 @@ This distinction matters for ProjectPHI:
 - pyDeid/Faker name surrogates are useful default replacements, but they are
   not stable across notes for the same patient under the current public
   `deid_string(...)` integration.
-- Stable patient-name surrogates therefore use project-level deterministic
-  Faker generation seeded from an HMAC over `patient_id` and a runtime secret,
-  but only for pyDeid-detected spans that match explicit patient aliases.
+- Stable patient-name and provider-name surrogates therefore use project-level
+  deterministic Faker generation seeded from HMACs over configured IDs and
+  runtime secrets, for pyDeid-detected spans that match explicit aliases and
+  for bounded residual exact matches to supplied aliases that pyDeid pruned.
 - Unknown names, clinician names, family names, and other non-matching names
   continue to use pyDeid's replacement behavior.
 
@@ -141,11 +144,16 @@ site-specific meaning in the project rule ID and governed configuration notes.
 pyDeid supports custom patient/doctor first and last name lists. ProjectPHI
 passes caller-provided lists through to pyDeid. When stable patient-name
 surrogates are enabled, ProjectPHI also derives custom patient name tokens
-from explicit aliases to improve pyDeid detection.
+from explicit aliases to improve pyDeid detection. When stable provider-name
+surrogates are enabled, ProjectPHI derives custom doctor name tokens from
+configured provider aliases.
 
 Those name-list hooks can broaden pyDeid detection. Project-stable patient-name
-replacement still applies only to pyDeid-detected spans that match explicit
-alias policy; unknown names remain pyDeid replacements.
+and provider-name replacement applies to explicit alias policy only. If pyDeid
+still misses or prunes a supplied alias, ProjectPHI can create a residual span
+using bounded exact matching against that caller-supplied alias. Single-token
+provider aliases require provider-role context. Unknown names remain pyDeid
+replacements.
 
 ## Title-Context Name Heuristics
 
@@ -158,8 +166,8 @@ name spans, for example `examined` in `The Dr. examined the patient`,
 ProjectPHI does not change pyDeid detection. It adds a narrow reconstruction
 veto for pyDeid-emitted title-derived name spans when the token is a curated
 clinical action word, appears in a narrow title or clinical-role context, is
-not an explicit custom/patient alias, and is not present in pyDeid's name
-lists. Lower-case action words use the base `Dr.` rule; capitalized action
+not an explicit custom patient/provider alias, and is not present in pyDeid's
+name lists. Lower-case action words use the base `Dr.` rule; capitalized action
 words also require specific following clinical-object context or generic
 patient/person context. This preserves common documentation verbs without
 turning pyDeid common words into a broad PHI override. If pyDeid also emits the

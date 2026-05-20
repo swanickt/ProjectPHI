@@ -3,8 +3,8 @@
 This page is a compact overview. For more details, see:
 
 - [Architecture](02_architecture.md)
-- [pyDeid Behavior](03_pydeid_behavior.md)
-- [ProjectPHI Behavior](04_ProjectPHI_behavior.md)
+- [pyDeid Behavior](03_pydeid_behaviour.md)
+- [ProjectPHI Behavior](04_ProjectPHI_behaviour.md)
 - [Semantic Preservation](07_semantic_preservation.md)
 - [Privacy And Audit Notes](06_privacy_and_audit_notes.md)
 - [Examples](08_examples.md)
@@ -18,21 +18,28 @@ note text
        - pruning/overlap handling
        - initial surrogate generation
   -> normalize pyDeid surrogate records into PHISpan
+  -> optional residual explicit patient/provider alias span creation
   -> optional project reconstruction from original-note offsets
        - protected clinical term veto
        - clinical abbreviation veto
        - stable date shifting
        - stable patient-name aliases
+       - stable provider-name aliases
        - ordinary-token veto
        - title-context action-word veto
        - pyDeid replacement fallback
   -> DeidentificationResult
 ```
 
-**ProjectPHI** is pyDeid-first. It does not add a separate detector, NER model,
-LLM verification step, or external API call. pyDeid remains
-the source of detection, pruning, built-in regex/list behavior, custom regex
-matching, custom name-list handling, and base surrogate generation.
+**ProjectPHI** is pyDeid-first. It does not add NER, an LLM verification step,
+or an external API call. pyDeid remains the source of general PHI detection,
+pruning, built-in regex/list behavior, custom regex matching, custom name-list
+handling, and base surrogate generation. The narrow exceptions are stable
+patient-name and stable provider-name modes: when explicit aliases are supplied,
+ProjectPHI can create residual spans for exact alias matches that pyDeid pruned
+before final output. Provider single-token residual aliases require local
+provider-role context. These passes check only caller-supplied aliases and do
+not infer arbitrary names.
 
 ## What pyDeid Provides
 
@@ -60,7 +67,10 @@ runtime behavior.
 - internal audit CSV output;
 - stable per-patient date shifting for supported pyDeid-detected full dates and
   month/year spans;
-- stable patient-name surrogates for explicit aliases only;
+- stable patient-name surrogates for explicit aliases only, including bounded
+  exact residual matching for supplied aliases missed or pruned by pyDeid;
+- stable provider-name surrogates for explicit governed aliases only,
+  including role-guarded residual matching for single-token provider aliases;
 - protected clinical term false-positive vetoes;
 - narrow clinical abbreviation and ordinary-token false-positive vetoes;
 - title-context action-word false-positive vetoes;
@@ -68,16 +78,18 @@ runtime behavior.
 
 ## Reconstruction
 
-When stable dates, stable patient-name surrogates, protected clinical terms,
-title-token fragments, or title-context action words are active,
+When stable dates, stable patient-name surrogates, stable provider-name
+surrogates, protected clinical terms, title-token fragments, or title-context
+action words are active,
 **ProjectPHI** reconstructs final text from original-note offsets. This avoids
 editing pyDeid's already-replaced text, where project replacements may have
 different lengths and offset systems would become ambiguous.
 
-By default, stable dates and stable patient-name surrogates are off. The small
-built-in protected clinical term set is on, so reconstruction can still run by
-default when pyDeid emits a span that a project semantic-preservation rule may
-preserve. See [Configuration](05_configuration.md#default-project-policy).
+By default, stable dates, stable patient-name surrogates, and stable
+provider-name surrogates are off. The small built-in protected clinical term
+set is on, so reconstruction can still run by default when pyDeid emits a span
+that a project semantic-preservation rule may preserve. See
+[Configuration](05_configuration.md#default-project-policy).
 
 
 Reconstruction priority:
@@ -90,12 +102,13 @@ Reconstruction priority:
 4. stable date shifting, including preservation of score/fraction notation that
    pyDeid emitted as a date-like span;
 5. stable patient-name surrogate policy;
-6. ordinary-token vetoes for selected pyDeid name false positives, such as
+6. stable provider-name surrogate policy;
+7. ordinary-token vetoes for selected pyDeid name false positives, such as
    articles/pronouns and guarded `NH` nursing-home shorthand;
-7. title-token-fragment vetoes for cases where pyDeid splits a
+8. title-token-fragment vetoes for cases where pyDeid splits a
    non-identifying `Dr.` token into name spans;
-8. title-context action-word veto;
-9. pyDeid replacement fallback.
+9. title-context action-word veto;
+10. pyDeid replacement fallback.
 
 Reconstruction fails closed on unexpected overlapping spans rather than
 silently preserving raw text.

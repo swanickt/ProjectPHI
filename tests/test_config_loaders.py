@@ -8,6 +8,7 @@ from project_phi.config_loaders import (
     load_custom_regexes_json,
     load_patient_alias_manifest,
     load_protected_clinical_terms_csv,
+    load_provider_alias_manifest,
 )
 
 
@@ -54,6 +55,51 @@ def test_load_patient_alias_manifest_rejects_empty_values_with_row_number(tmp_pa
 
     assert "Zylanda" not in str(exc_info.value)
     assert "Patient/synth-001" not in str(exc_info.value)
+
+
+def test_load_provider_alias_manifest_valid_synthetic_csv(tmp_path):
+    manifest = tmp_path / "providers.csv"
+    manifest.write_text(
+        "provider_id,alias\n"
+        " Provider/synth-001 , Chen \n"
+        "Provider/synth-001,Lena Shore\n"
+        "\n"
+        "Provider/synth-002,Green\n",
+        encoding="utf-8",
+    )
+
+    assert load_provider_alias_manifest(manifest) == {
+        "Provider/synth-001": ["Chen", "Lena Shore"],
+        "Provider/synth-002": ["Green"],
+    }
+
+
+def test_load_provider_alias_manifest_rejects_missing_columns(tmp_path):
+    manifest = tmp_path / "providers.csv"
+    manifest.write_text("provider_id,name\nProvider/synth-001,Chen\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing required columns") as exc_info:
+        load_provider_alias_manifest(manifest)
+
+    assert "Chen" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "contents",
+    [
+        "provider_id,alias\n, Chen\n",
+        "provider_id,alias\nProvider/synth-001, \n",
+    ],
+)
+def test_load_provider_alias_manifest_rejects_empty_values_with_row_number(tmp_path, contents):
+    manifest = tmp_path / "providers.csv"
+    manifest.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="row 2") as exc_info:
+        load_provider_alias_manifest(manifest)
+
+    assert "Chen" not in str(exc_info.value)
+    assert "Provider/synth-001" not in str(exc_info.value)
 
 
 def test_load_custom_regexes_json_valid_synthetic_config(tmp_path):

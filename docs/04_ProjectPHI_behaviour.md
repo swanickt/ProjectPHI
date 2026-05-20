@@ -29,6 +29,18 @@ the `surrogates` output. Normalization keeps:
 
 Persistent audit outputs omit raw detected PHI text by default.
 
+When stable patient-name surrogates are enabled, ProjectPHI may add additional
+`PHISpan` records after normalization for supplied patient aliases that pyDeid
+did not emit as final spans. These residual spans have original-note offsets,
+`source="ProjectPHI.residual_alias"`, and are limited to bounded exact matches
+against the explicit alias profile for the current patient.
+
+When stable provider-name surrogates are enabled, ProjectPHI may also add
+residual provider-alias spans for supplied provider aliases that pyDeid did not
+emit. These spans use `source="ProjectPHI.residual_provider_alias"`. Full
+provider aliases can match exactly; single-token provider aliases require local
+provider-role context such as `Radiologist Chen` or `Social worker Green`.
+
 ## Reconstruction
 
 `src/project_phi/reconstruction.py` rebuilds the final text from original-note
@@ -37,17 +49,18 @@ text. Reconstruction is used for:
 
 - stable date shifting;
 - stable patient-name surrogates;
+- stable provider-name surrogates;
 - protected clinical term preservation;
 - narrow clinical abbreviation preservation;
 - ordinary-token false-positive preservation;
 - title-token-fragment preservation;
 - title-context action-word preservation.
 
-**Default configuration:** stable date shifting and stable patient-name
-surrogates are opt-in, but built-in protected clinical terms are enabled by
-default. As a result, reconstruction may run in the default pipeline for
-span-local semantic-preservation vetoes even when no stable replacement mode is
-enabled.
+**Default configuration:** stable date shifting, stable patient-name
+surrogates, and stable provider-name surrogates are opt-in, but built-in
+protected clinical terms are enabled by default. As a result, reconstruction
+may run in the default pipeline for span-local semantic-preservation vetoes
+even when no stable replacement mode is enabled.
 
 Reconstruction fails closed on unexpected overlapping spans. Silently skipping
 an overlap could preserve raw text, so the code raises a sanitized error.
@@ -62,11 +75,12 @@ Priority order during reconstruction:
 4. stable date shifting, including preservation of score/fraction notation that
    pyDeid emitted as a date-like span;
 5. stable patient-name surrogate policy;
-6. ordinary-token vetoes for selected pyDeid name false positives;
-7. title-token-fragment vetoes for pyDeid-split `Dr.` fragments in strong
+6. stable provider-name surrogate policy;
+7. ordinary-token vetoes for selected pyDeid name false positives;
+8. title-token-fragment vetoes for pyDeid-split `Dr.` fragments in strong
    title/name or clinical-role/title/name contexts;
-8. title-context action-word veto;
-9. pyDeid replacement fallback.
+9. title-context action-word veto;
+10. pyDeid replacement fallback.
 
 ## Stable Date Shifting
 
@@ -144,6 +158,14 @@ The project does not infer aliases from note text. Unknown name spans keep
 pyDeid replacement behavior and can be marked as `unknown_name_pydeid` when
 reconstruction metadata is present.
 
+Explicit aliases are first passed to pyDeid through custom patient name-list
+hooks where possible. After pyDeid pruning, ProjectPHI also performs a bounded
+exact residual pass over only the supplied aliases for that patient. This can
+replace aliases such as a full patient name that pyDeid considered ambiguous
+and pruned. The residual pass uses word/number boundaries, prefers longer
+aliases before shorter components, skips ranges already occupied by pyDeid
+spans, and does not search for unknown names.
+
 For matching explicit patient aliases, the fake identity is generated with
 deterministic Faker seeded from patient_id and the patient-name secret.
 ProjectPHI prefers Faker's Canadian English locale (en_CA) for these stable
@@ -153,6 +175,47 @@ fallback. The wrapper does not infer gender from the original alias, note text,
 diagnosis, or pronouns. Exact fake names may vary if the runtime Faker
 version/provider data changes, so deployments that require byte-for-byte stable
 surrogates should pin their environment.
+
+Residual alias replacements are audited with
+`replacement_source="project_residual_patient_alias"` and
+`project_name_policy="residual_explicit_patient_alias"`. pyDeid-detected alias
+spans continue to use `replacement_source="project_stable_patient_name"`.
+
+## Stable Provider-Name Surrogates
+
+When `stable_provider_name_surrogates=True`, ProjectPHI can override pyDeid
+name replacements for explicit provider aliases:
+
+- provider aliases are required as a mapping from `provider_id` to aliases;
+- a provider-name secret is required directly or through
+  `provider_name_secret_env_var`;
+- pyDeid name detection must be enabled.
+
+Provider aliases are governed runtime configuration, not a provider detector.
+ProjectPHI does not infer provider names from note text. Unknown names keep
+pyDeid replacement behavior and can be marked as `unknown_name_pydeid` when
+reconstruction metadata is present.
+
+Explicit provider aliases are first passed to pyDeid through custom doctor
+name-list hooks where possible. After pyDeid pruning, ProjectPHI performs a
+bounded exact residual pass over only configured provider aliases. Full aliases
+such as `Lena Shore` can match exactly without role context. Single-token
+aliases such as `Chen`, `Green`, or `Cook` require nearby provider-role context
+such as `Radiologist Chen`, `Social worker Green`, or a nearby `MD` marker.
+This prevents configured common-word-like names from being replaced globally.
+
+Provider fake identities are deterministic per `provider_id` and provider-name
+secret. They use the same Faker-backed generation path as stable patient names,
+with the same caveat that exact fake names can vary if the runtime Faker
+version/provider data changes.
+
+Provider alias replacements are audited with
+`replacement_source="project_stable_provider_name"` for pyDeid-emitted spans or
+`replacement_source="project_residual_provider_alias"` for residual spans.
+Policy metadata uses `project_name_policy="known_provider_alias"` or
+`project_name_policy="residual_explicit_provider_alias"`,
+`name_role="known_provider_alias"`, and `alias_match_type` values such as
+`full`, `given`, or `single_token`.
 
 ## Protected Clinical Terms
 
@@ -200,7 +263,8 @@ splits a non-identifying `Dr.` token itself into name spans, such as `D` and
 `r.` after `family physician`. The veto preserves only fragments inside the
 exact title token and only when a strong clinical-role/title/name or
 title/name context is present. The actual clinician name spans still use
-pyDeid replacement unless another explicit project policy applies.
+pyDeid replacement unless another explicit project policy, such as stable
+provider-name surrogates, applies.
 
 ## CSV Adapter
 
@@ -223,6 +287,7 @@ The CLI (`python -m project_phi.cli` or `project-phi-deid`) wraps
 Config loaders parse:
 
 - patient alias manifest CSV;
+- provider alias manifest CSV;
 - custom regex JSON;
 - protected clinical terms CSV.
 

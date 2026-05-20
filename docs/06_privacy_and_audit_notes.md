@@ -21,6 +21,8 @@ Audit rows may include:
 - preserved title-token fragments such as `Dr.` pieces and policy metadata;
 - preserved ordinary-token or clinical-abbreviation text and policy metadata;
 - preserved obstetric-history shorthand text and policy metadata;
+- stable residual explicit patient-alias replacement metadata;
+- stable explicit provider-alias replacement metadata;
 - patient, encounter, or note identifiers if configured in input columns.
 
 This information is useful for review, but it is more detailed than ordinary training output should need.
@@ -72,9 +74,33 @@ text, raw aliases, or detected PHI. If stable patient-name surrogates are
 disabled, pyDeid still replaces names normally, but its generated replacements
 may differ across notes for the same patient.
 
+When aliases are supplied, ProjectPHI can exact-match only those aliases after
+pyDeid to catch values pyDeid pruned. Residual alias audit rows record policy
+metadata such as `replacement_source="project_residual_patient_alias"` and
+`project_name_policy="residual_explicit_patient_alias"`, but the audit writer
+still omits raw alias text and raw detected PHI text.
+
 Stable date shifting is separate from alias handling. It can be stable across
 notes using `patient_id` and a date-shift secret, without a patient alias
 manifest.
+
+## Provider Alias Manifests
+
+Stable provider-name surrogates require explicit provider aliases keyed by
+provider ID. Provider aliases are governed runtime configuration, not a public
+provider list and not a provider detector. The pipeline does not infer provider
+names from note text.
+
+When provider aliases are supplied, ProjectPHI can exact-match only those
+aliases after pyDeid to catch values pyDeid missed or pruned. Full aliases can
+match exactly. Single-token aliases require local provider-role context, which
+reduces the risk of replacing common words globally.
+
+Provider alias audit rows record policy metadata such as
+`replacement_source="project_stable_provider_name"` or
+`replacement_source="project_residual_provider_alias"`, plus
+`project_name_policy` and `name_role="known_provider_alias"`. The audit writer
+still omits raw alias text and raw detected PHI text.
 
 ## Protected Clinical Terms
 
@@ -129,10 +155,13 @@ pyDeid performs the actual custom regex matching. The project wrapper suppresses
 
 ## Secret Handling
 
-Date shifting and patient-name surrogate generation use runtime secrets. Secrets can be supplied directly or by environment variable. Recommended environment variables:
+Date shifting, patient-name surrogate generation, and provider-name surrogate
+generation use runtime secrets. Secrets can be supplied directly or by
+environment variable. Recommended environment variables:
 
 - `PROJECT_PHI_DATE_SHIFT_SECRET`
 - `PROJECT_PHI_PATIENT_NAME_SECRET`
+- `PROJECT_PHI_PROVIDER_NAME_SECRET`
 
 Do not commit secrets. Do not write secrets, HMAC digests, or raw hashes into output or audit files.
 

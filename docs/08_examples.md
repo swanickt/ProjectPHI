@@ -113,11 +113,13 @@ custom_dr_last_names={"Pavo"}
 
 Expected behavior:
 
-- pyDeid remains responsible for detecting name spans.
+- pyDeid remains responsible for detecting general name spans.
 - Patient aliases are not inferred from note text.
 - pyDeid-detected spans matching explicit patient aliases use one deterministic
   Faker-generated patient identity for the same `patient_id`, secret, and
   pinned runtime environment.
+- Supplied aliases that pyDeid misses or prunes can still be replaced by a
+  bounded exact residual pass.
 - Unknown or clinician names remain pyDeid replacements and are not treated as
   patient aliases.
 
@@ -134,7 +136,17 @@ Relevant known-patient span metadata:
 replacement_source="project_stable_patient_name"
 project_name_policy="known_patient_alias"
 name_role="known_patient_alias"
-alias_match_type="full_alias" or "given_alias"
+alias_match_type="full" or "given"
+```
+
+If pyDeid prunes a supplied alias before ProjectPHI sees it, the residual span
+uses:
+
+```text
+replacement_source="project_residual_patient_alias"
+project_name_policy="residual_explicit_patient_alias"
+name_role="known_patient_alias"
+alias_match_type="full" or "given" or "family" or "title_family"
 ```
 
 Relevant unknown-name span metadata, when reconstruction metadata is present:
@@ -142,6 +154,70 @@ Relevant unknown-name span metadata, when reconstruction metadata is present:
 ```text
 project_name_policy="unknown_name_pydeid"
 name_role="unknown_name"
+```
+
+## Stable Provider-Name Surrogates
+
+Input:
+
+```text
+Radiologist Chen reviewed mammography.
+Copy to Lena Shore after review.
+Green vegetables were discussed.
+```
+
+Configuration:
+
+```text
+stable_provider_name_surrogates=True
+provider_aliases_by_provider_id={
+    "Provider/synthetic-chen": ["Chen"],
+    "Provider/synthetic-shore": ["Lena Shore"],
+}
+provider_name_secret_env_var="PROJECT_PHI_PROVIDER_NAME_SECRET"
+```
+
+Expected behavior:
+
+- Provider aliases are not inferred from note text.
+- pyDeid-detected spans matching explicit provider aliases use deterministic
+  fake provider identities keyed by `provider_id`, secret, and pinned runtime
+  environment.
+- Supplied provider aliases that pyDeid misses or prunes can still be replaced
+  by a bounded exact residual pass.
+- Full aliases such as `Lena Shore` can match exactly.
+- Single-token aliases such as `Chen` require provider-role context, such as
+  `Radiologist Chen`.
+- Configured single-token names are not replaced globally in ordinary text, so
+  `Green vegetables` remains unchanged unless `Green` appears in provider-role
+  context.
+- Unknown or unconfigured names remain pyDeid replacements.
+
+Example output shape:
+
+```text
+Radiologist <stable fake provider family name> reviewed mammography.
+Copy to <stable fake provider full name> after review.
+Green vegetables were discussed.
+```
+
+Relevant provider span metadata:
+
+```text
+replacement_source="project_stable_provider_name"
+project_name_policy="known_provider_alias"
+name_role="known_provider_alias"
+alias_match_type="full" or "given" or "single_token"
+```
+
+If pyDeid prunes a supplied provider alias before ProjectPHI sees it, the
+residual span uses:
+
+```text
+replacement_source="project_residual_provider_alias"
+project_name_policy="residual_explicit_provider_alias"
+name_role="known_provider_alias"
+alias_match_type="full" or "single_token"
 ```
 
 ## Protected Clinical Term False-Positive Veto
@@ -335,6 +411,8 @@ audit_output_file="synthetic_audit.csv"
 stable_date_shift=True
 stable_patient_name_surrogates=True
 patient_aliases_by_patient_id={"Patient/synthetic-002": ["Zylanda Qorven"]}
+stable_provider_name_surrogates=True
+provider_aliases_by_provider_id={"Provider/synthetic-chen": ["Chen"]}
 ```
 
 Expected behavior:
@@ -387,6 +465,9 @@ project-phi-deid synthetic_input.csv synthetic_output.csv \
   --stable-patient-name-surrogates \
   --patient-alias-manifest synthetic_aliases.csv \
   --patient-name-secret-env-var PROJECT_PHI_PATIENT_NAME_SECRET \
+  --stable-provider-name-surrogates \
+  --provider-alias-manifest synthetic_providers.csv \
+  --provider-name-secret-env-var PROJECT_PHI_PROVIDER_NAME_SECRET \
   --custom-regex-json synthetic_regexes.json \
   --protected-clinical-terms-csv synthetic_protected_terms.csv
 ```

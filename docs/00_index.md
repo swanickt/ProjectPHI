@@ -20,17 +20,17 @@ growth.
 - [Pipeline Overview](01_pipeline_overview.md): Single-page, compact, cross-reference overview.
 - [Architecture](02_architecture.md): module layout, data flow, pyDeid boundary,
   CSV/CLI/config layers.
-- [pyDeid Behavior](03_pydeid_behavior.md): behavior inherited from pyDeid and
+- [pyDeid Behavior](03_pydeid_behaviour.md): behavior inherited from pyDeid and
   what the wrapper deliberately leaves to pyDeid.
-- [ProjectPHI Behavior](04_ProjectPHI_behavior.md): normalized span model,
+- [ProjectPHI Behavior](04_ProjectPHI_behaviour.md): normalized span model,
   reconstruction, stable date/name replacement, protected terms, CSV, CLI.
 - [Configuration](05_configuration.md): Python APIs, CLI flags, config file shapes, and
   secrets.
 - [Privacy And Audit Notes](06_privacy_and_audit_notes.md): audit CSV boundaries,
   sanitization policy, secret handling, residual risks.
-- [Semantic Preservation](07_semantic_preservation.md): date intervals, aliases,
-  protected clinical terms, false-positive tradeoffs, external terminology
-  source policy.
+- [Semantic Preservation](07_semantic_preservation.md): date intervals, patient
+  and provider aliases, protected clinical terms, false-positive tradeoffs,
+  external terminology source policy.
 - [Examples](08_examples.md): synthetic input/output/behavior examples for the
   note, CSV, stable replacement, custom regex, and protected-term workflows.
 - [Current Limitations](09_current_limitations.md): known behavior gaps,

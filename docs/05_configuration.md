@@ -24,6 +24,10 @@ deidentify_note(
     patient_aliases=None,
     patient_name_secret=None,
     patient_name_secret_env_var=None,
+    stable_provider_name_surrogates=False,
+    provider_aliases_by_provider_id=None,
+    provider_name_secret=None,
+    provider_name_secret_env_var=None,
     custom_regexes=None,
     protected_clinical_terms=None,
     include_builtin_protected_clinical_terms=True,
@@ -60,6 +64,10 @@ deidentify_csv(
     patient_aliases_by_patient_id=None,
     patient_name_secret=None,
     patient_name_secret_env_var=None,
+    stable_provider_name_surrogates=False,
+    provider_aliases_by_provider_id=None,
+    provider_name_secret=None,
+    provider_name_secret_env_var=None,
     custom_regexes=None,
     protected_clinical_terms=None,
     include_builtin_protected_clinical_terms=True,
@@ -77,7 +85,12 @@ secrets or patient-specific config:
 - `stable_date_shift=False`: stable date shifting is off unless explicitly
   enabled.
 - `stable_patient_name_surrogates=False`: stable patient-name replacement is
-  off unless explicitly enabled with aliases and a secret.
+  off unless explicitly enabled with aliases and a secret. When enabled, it can
+  exact-match supplied aliases that pyDeid pruned, but it does not infer names.
+- `stable_provider_name_surrogates=False`: stable provider-name replacement is
+  off unless explicitly enabled with provider aliases and a secret. When
+  enabled, full aliases can exact-match, while single-token aliases require
+  provider-role context.
 - `include_builtin_protected_clinical_terms=True`: the small built-in protected
   clinical term set is active by default.
 - Narrow semantic-preservation vetoes such as clinical abbreviation,
@@ -86,8 +99,10 @@ secrets or patient-specific config:
 
 Because built-in protected clinical terms are enabled by default, ProjectPHI
 may reconstruct final text from original-note offsets even when stable dates
-and stable patient-name surrogates are off. Reconstruction still uses only
-pyDeid-emitted spans; it does not create a separate detector.
+and stable name surrogate modes are off. In that default path, reconstruction
+still uses only pyDeid-emitted spans. Residual alias spans are created only
+when stable patient-name or stable provider-name surrogates are explicitly
+enabled with aliases.
 
 ## `types`
 
@@ -106,7 +121,9 @@ pyDeid-emitted spans; it does not create a separate detector.
 ]
 ```
 
-Stable date shifting requires `"dates"` when `types` is provided. Stable patient-name surrogates require `"names"` when `types` is provided.
+Stable date shifting requires `"dates"` when `types` is provided. Stable
+patient-name and provider-name surrogates require `"names"` when `types` is
+provided.
 
 ## pyDeid Pass-Through Boundary
 
@@ -120,6 +137,10 @@ uses directly:
 - `custom_patient_last_names`;
 - `named_entity_recognition`, which must remain `False`;
 - pyDeid custom regex objects produced from `custom_regexes`.
+
+Stable patient-name aliases can add tokens to the pyDeid custom patient name
+lists. Stable provider-name aliases can add tokens to the pyDeid custom doctor
+name lists.
 
 The local pyDeid `deid_string(...)` also accepts date-year threshold options
 such as `two_digit_threshold`, `valid_year_low`, and `valid_year_high`.
@@ -208,11 +229,19 @@ result = deidentify_note(
 ```
 
 Only explicit aliases and conservative alias components are treated as the
-patient. Matching aliases use one deterministic Faker-generated identity
-seeded from patient_id and the patient-name secret. ProjectPHI prefers
-Faker's Canadian English locale (en_CA), falls back to Faker's default locale
-if needed, and uses the small in-source name pools only as an emergency
-fallback. Unknown names remain pyDeid replacements.
+patient. ProjectPHI passes alias-derived name tokens to pyDeid to improve
+detection, then applies stable replacements to pyDeid-emitted alias spans. It
+also performs a bounded exact residual pass for supplied aliases that pyDeid
+missed or pruned. The residual pass checks only the explicit aliases for the
+current patient, uses word/number boundaries, prefers longer aliases before
+shorter components, and skips ranges already occupied by pyDeid spans. It does
+not search for arbitrary names.
+
+Matching aliases use one deterministic Faker-generated identity seeded from
+patient_id and the patient-name secret. ProjectPHI prefers Faker's Canadian
+English locale (en_CA), falls back to Faker's default locale if needed, and
+uses the small in-source name pools only as an emergency fallback. Unknown
+names remain pyDeid replacements.
 
 The project does not infer gender from aliases, note text, pronouns, diagnosis,
 or service line. Exact fake names may depend on the installed Faker
@@ -239,6 +268,11 @@ structured patient table
 If `stable_patient_name_surrogates=True` and no aliases are supplied for a row,
 the row fails through the existing row-failure path. The failed row is omitted
 from output, `rows_failed` increments, and summary/audit warnings are sanitized.
+
+If aliases are supplied, ProjectPHI may exact-match those aliases even when
+pyDeid did not emit final name spans for them. This is still not alias
+inference: the pass is limited to the governed manifest or `patient_aliases`
+values provided by the caller.
 
 If stable patient-name surrogates are disabled, pyDeid still handles names with
 its normal replacement behavior. Those replacements are not guaranteed to be
@@ -270,6 +304,77 @@ Patient/synthetic-002,Zylanda
 The loader trims whitespace, preserves alias order per patient, skips completely
 blank rows, and rejects missing columns or empty values with sanitized row-number
 errors. It does not infer aliases or perform entity resolution.
+
+## Stable Provider-Name Surrogates
+
+Parameters:
+
+- `stable_provider_name_surrogates=True`
+- `provider_aliases_by_provider_id`: required for `deidentify_note(...)` and
+  `deidentify_csv(...)`
+- `provider_name_secret` or `provider_name_secret_env_var`: required
+
+Recommended environment variable:
+
+```bash
+export PROJECT_PHI_PROVIDER_NAME_SECRET="use-a-governed-runtime-secret"
+```
+
+Example:
+
+```python
+result = deidentify_note(
+    "Radiologist Chen reviewed mammography.",
+    stable_provider_name_surrogates=True,
+    provider_aliases_by_provider_id={
+        "Provider/synthetic-chen": ["Chen"],
+    },
+    provider_name_secret_env_var="PROJECT_PHI_PROVIDER_NAME_SECRET",
+)
+```
+
+Only configured provider aliases are treated as providers. ProjectPHI passes
+alias-derived tokens to pyDeid as custom doctor names where possible, then
+applies stable replacements to pyDeid-emitted provider alias spans. It also
+performs a bounded exact residual pass for configured provider aliases that
+pyDeid missed or pruned.
+
+Full aliases such as `Lena Shore` can match exactly. Single-token aliases such
+as `Chen`, `Green`, or `Cook` require nearby provider-role context, for example
+`Radiologist Chen`, `Social worker Green`, or an adjacent `MD` marker. This
+keeps configured common-word-like provider names from being replaced globally.
+Unknown names remain pyDeid replacements.
+
+Provider fake identities are deterministic per `provider_id` and provider-name
+secret. Exact fake names may depend on the installed Faker version/provider
+data, so pin the runtime environment if byte-for-byte stable provider
+surrogate names are required across deployments.
+
+### Provider Alias Manifest CSV
+
+For CSV and CLI processing, provider aliases can be loaded from a small
+manifest with synthetic or governed runtime data:
+
+```csv
+provider_id,alias
+Provider/synthetic-chen,Chen
+Provider/synthetic-shore,Lena Shore
+```
+
+`load_provider_alias_manifest(path)` can be imported from
+`project_phi.config_loaders` and returns:
+
+```python
+{
+    "Provider/synthetic-chen": ["Chen"],
+    "Provider/synthetic-shore": ["Lena Shore"],
+}
+```
+
+The loader trims whitespace, preserves alias order per provider, skips
+completely blank rows, and rejects missing columns or empty values with
+sanitized row-number errors. It does not validate real provider identities,
+infer aliases, or perform entity resolution.
 
 ## Custom Regexes
 
@@ -499,6 +604,9 @@ project-phi-deid synthetic_input.csv synthetic_output.csv \
   --stable-patient-name-surrogates \
   --patient-alias-manifest synthetic_aliases.csv \
   --patient-name-secret-env-var PROJECT_PHI_PATIENT_NAME_SECRET \
+  --stable-provider-name-surrogates \
+  --provider-alias-manifest synthetic_providers.csv \
+  --provider-name-secret-env-var PROJECT_PHI_PROVIDER_NAME_SECRET \
   --custom-regex-json synthetic_regexes.json \
   --protected-clinical-terms-csv synthetic_protected_terms.csv
 ```

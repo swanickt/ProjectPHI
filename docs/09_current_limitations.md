@@ -8,78 +8,7 @@ ProjectPHI remains pyDeid-first. A limitation listed here is not necessarily a
 bug in pyDeid or ProjectPHI; it is a behavior that matters for this project’s
 clinical semantic-preservation and risk-reduction goals.
 
-## 1. Explicit Patient Aliases Can Be Pruned Before ProjectPHI Sees Them
-
-### Problem
-
-An explicit patient alias supplied through the alias manifest can remain in the
-final output if pyDeid does not emit a final, pruned name span for that alias.
-
-Observed synthetic example:
-
-```text
-Input:
-Patient Amelia Rowan was seen by Dr. Lena Shore.
-
-Alias manifest:
-SYN-P001,Amelia Rowan
-SYN-P001,Amelia
-SYN-P001,Rowan
-
-Output observed in local smoke testing:
-Patient Amelia Rowan was seen by Dr. Richard Gonzalez.
-```
-
-The clinician name was replaced, but `Amelia Rowan` remained.
-
-### Reason
-
-ProjectPHI’s stable patient-name surrogate layer only replaces pyDeid-emitted,
-pyDeid-pruned name spans that match explicit patient aliases. It does not scan
-the whole note for aliases independently.
-
-In the observed case, pyDeid initially identified ambiguous name candidates:
-
-```text
-Patient -> Last Name (ambig)
-Amelia  -> Female First Name (ambig)
-Rowan   -> Last Name (ambig)
-seen    -> Last Name (ambig)
-Lena    -> stronger title-context name evidence
-Shore   -> stronger title-context name evidence
-```
-
-After pyDeid pruning, only `Lena` and `Shore` survived as final name spans.
-`Amelia` and `Rowan` were ambiguous/common-word-like candidates and were pruned.
-Because ProjectPHI receives only the final pyDeid spans, the stable alias layer
-had no patient-name span to replace.
-
-This is consistent with the pyDeid-first design, but it is a practical recall
-gap for explicit patient aliases.
-
-### Potential Solution
-
-Add an opt-in explicit-alias residual policy after pyDeid processing. Possible
-modes:
-
-- `warn`: scan only the provided explicit aliases in final output and emit a
-  sanitized warning if any remain.
-- `fail_row`: for CSV processing, omit rows where explicit aliases remain after
-  de-identification.
-- `replace_explicit_aliases`: replace exact matches from the provided alias
-  manifest after pyDeid, without detecting arbitrary names.
-
-Important constraints for any future solution:
-
-- do not infer aliases from note text;
-- do not scan for arbitrary names;
-- do not treat unknown clinician/family/copied-correspondence names as patient
-  aliases;
-- do not log raw aliases in warnings or audit rows;
-- keep behavior configurable because it intentionally goes beyond pyDeid’s
-  final pruned span output.
-
-## 2. Reserved-Domain Synthetic Emails May Not Reflect Real Email Behavior
+## 1. Reserved-Domain Synthetic Emails May Not Reflect Real Email Behavior
 
 ### Problem
 
@@ -120,7 +49,7 @@ synthetic.patient@samplehospital.ca
 If governed/local evaluation shows realistic email styles are missed, add a
 targeted custom regex configuration.
 
-## 3. Gender-Neutral Stable Names Can Conflict With Pronouns
+## 2. Gender-Neutral Stable Names Can Conflict With Pronouns
 
 ### Problem
 
@@ -174,12 +103,13 @@ Future constraints:
 - keep deterministic selection keyed by patient ID and secret;
 - document residual readability and bias tradeoffs.
 
-## 4. Role-Associated Provider Names May Remain If pyDeid Emits No Span
+## 3. Unconfigured Provider Names May Remain If pyDeid Emits No Span
 
 ### Problem
 
 Provider or staff names can remain in output when they appear after a clinical
-role word that pyDeid does not treat as a strong title/name cue.
+role word that pyDeid does not treat as a strong title/name cue and no governed
+provider alias manifest is supplied for those names.
 
 Observed synthetic patterns worth tracking:
 
@@ -192,9 +122,15 @@ Surgeon Cook discussed pathology with the patient.
 
 ### Reason
 
-ProjectPHI remains pyDeid-first. It only replaces or preserves spans that
-pyDeid emits after its own detection and pruning. It does not scan the full
-note for arbitrary role-name patterns.
+ProjectPHI remains pyDeid-first for arbitrary names. It does not scan the full
+note for arbitrary role-name patterns or infer provider identities from role
+words.
+
+The stable provider-name surrogate mode can address this class only for
+explicitly configured provider aliases. In that mode, ProjectPHI can exact-match
+supplied full provider aliases and can match supplied single-token provider
+aliases only in local provider-role context. Unknown or unconfigured provider
+names remain pyDeid behavior.
 
 pyDeid has finite title/name-context handling. Some role words, such as `Dr.`
 or `Nurse`, can help pyDeid identify nearby names. Other role phrases, such as
@@ -203,20 +139,17 @@ or `Nurse`, can help pyDeid identify nearby names. Other role phrases, such as
 English words, such as `Cook` or `Green`, can be especially easy to miss or
 prune because pyDeid intentionally protects common words to preserve semantics.
 
-### Potential Solution
+### Potential Mitigation
 
-Defer implementation until local evaluation shows this pattern is common
-enough to justify a project rule. A future fix should be narrow and opt-in,
-for example:
+Use stable provider-name surrogates when governed provider aliases are
+available:
 
-- a governed role/context list for provider-like phrases;
-- exact role-context matching only, not broad name scanning;
-- one- or two-token capitalized provider candidates after approved role
-  phrases;
-- safeguards for common clinical action words and protected clinical terms;
-- audit metadata showing that a project role-context policy triggered;
-- synthetic positive and negative tests.
+- supply a runtime `provider_id,alias` manifest;
+- enable `stable_provider_name_surrogates`;
+- provide a provider-name secret directly or through an environment variable;
+- review audit metadata such as `project_stable_provider_name` and
+  `project_residual_provider_alias`.
 
-Provider name resources, if used, should be governed runtime artifacts rather
-than public committed provider lists. This should not become a general NER
+Provider name resources should remain governed runtime artifacts rather than
+public committed provider lists. This mode should not become a general NER
 system or a broad free-text person detector.

@@ -1,7 +1,7 @@
 """Project-stable replacement reconstruction from original-note offsets.
 
 Reconstruction is used when ProjectPHI needs final replacements that may differ
-from pyDeid's initial surrogate text, such as stable date shifts, stable patient
+from pyDeid's initial surrogate text, such as stable date shifts, stable name
 aliases, or protected clinical-term preservation.
 
 This module rebuilds the final note from the original note plus normalized
@@ -22,11 +22,12 @@ Replacement priority:
 2. Preserve narrow clinical abbreviation false positives such as `PMHx`.
 3. Preserve strict obstetric-history shorthand such as `G1P0A0`.
 4. Apply stable date shifting/preservation/fallback when date shifting is enabled.
-5. Apply stable patient-name aliases when name replacement is enabled.
-6. Preserve narrow ordinary-token false positives such as articles/pronouns.
-7. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
-8. Preserve narrow title-context action-word false positives.
-9. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
+5. Apply stable patient-name aliases when patient alias replacement is enabled.
+6. Apply stable provider-name aliases when provider alias replacement is enabled.
+7. Preserve narrow ordinary-token false positives such as articles/pronouns.
+8. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
+9. Preserve narrow title-context action-word false positives.
+10. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
 
 Examples:
     Original:
@@ -69,6 +70,7 @@ from .date_shift import (
 )
 from .models import PHISpan
 from .patient_names import _name_policy_metadata, _project_patient_name_replacement
+from .provider_names import _project_provider_name_replacement, _provider_name_policy_metadata
 from .protected_terms import _protected_term_match, _protected_term_metadata
 from .title_context import (
     _title_context_action_word_match,
@@ -246,6 +248,8 @@ def _reconstruct_with_project_replacements(
     date_shift_days: int | None = None,
     patient_name_alias_profile: dict[str, Any] | None = None,
     patient_name_identity: dict[str, str] | None = None,
+    provider_name_alias_profile: dict[str, Any] | None = None,
+    provider_name_identities: dict[str, dict[str, str]] | None = None,
     protected_terms_profile: dict[str, Any] | None = None,
 ) -> tuple[str, list[PHISpan], list[str]]:
     """Rebuild final note text from original text and normalized spans.
@@ -315,6 +319,8 @@ def _reconstruct_with_project_replacements(
             original_text=original_text,
             patient_name_alias_profile=patient_name_alias_profile,
             patient_name_identity=patient_name_identity,
+            provider_name_alias_profile=provider_name_alias_profile,
+            provider_name_identities=provider_name_identities,
             protected_terms_profile=protected_terms_profile,
         )
         replacement_text, replacement_source, policy, policy_metadata = replacement_info
@@ -343,6 +349,8 @@ def _reconstruct_with_project_replacements(
             metadata["project_date_shift_days"] = date_shift_offset
         if patient_name_alias_profile is not None and span.label == "NAME":
             metadata.update(_name_policy_metadata(replacement_source, policy))
+        if provider_name_alias_profile is not None and span.label == "NAME":
+            metadata.update(_provider_name_policy_metadata(replacement_source, policy))
         metadata.update(policy_metadata)
 
         final_spans.append(
@@ -368,6 +376,8 @@ def _project_replacement_for_span(
     original_text: str = "",
     patient_name_alias_profile: dict[str, Any] | None = None,
     patient_name_identity: dict[str, str] | None = None,
+    provider_name_alias_profile: dict[str, Any] | None = None,
+    provider_name_identities: dict[str, dict[str, str]] | None = None,
     protected_terms_profile: dict[str, Any] | None = None,
 ) -> tuple[str, str, str, dict[str, Any]]:
     """Choose final replacement text and policy metadata for one span.
@@ -396,21 +406,25 @@ def _project_replacement_for_span(
        replace explicit patient aliases with the deterministic fake patient
        identity.
 
-    6. Ordinary-token veto:
+    6. Stable provider-name policy:
+       replace explicit provider aliases with deterministic fake provider
+       identities. Single-token aliases require provider-role context.
+
+    7. Ordinary-token veto:
        preserve selected articles, pronouns, and clinical shorthand that pyDeid
        emitted as very short name spans when context supports a non-name read.
 
-    7. Title-token-fragment veto:
+    8. Title-token-fragment veto:
        preserve non-identifying `Dr.` fragments when pyDeid split the title
        token itself into name spans in a strong title/name or role/title/name
        context.
 
-    8. Title-context action-word veto:
+    9. Title-context action-word veto:
        preserve narrow clinical action words that pyDeid emitted as
        title-derived name spans in `Dr.` contexts. Lower-case words use the
        base rule; capitalized words require following clinical-object context.
 
-    9. pyDeid fallback:
+    10. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
 
     Args:
@@ -529,6 +543,26 @@ def _project_replacement_for_span(
             )
             return replacement_text, replacement_source, match_type, {}
 
+    if (
+        provider_name_alias_profile is not None
+        and provider_name_identities is not None
+        and span.label == "NAME"
+    ):
+        provider_replacement = _project_provider_name_replacement(
+            span,
+            original_text=original_text,
+            provider_alias_profile=provider_name_alias_profile,
+            provider_name_identities=provider_name_identities,
+        )
+        if provider_replacement is not None:
+            replacement_text, match_type = provider_replacement
+            replacement_source = (
+                "project_residual_provider_alias"
+                if span.source == "ProjectPHI.residual_provider_alias"
+                else "project_stable_provider_name"
+            )
+            return replacement_text, replacement_source, match_type, {}
+
     ordinary_token_match = _ordinary_token_veto_metadata(span, original_text)
     if ordinary_token_match is not None:
         return (
@@ -566,6 +600,9 @@ def _project_replacement_for_span(
         )
 
     if patient_name_alias_profile is not None and patient_name_identity is not None and span.label == "NAME":
+        return span.replacement or "<PHI>", "pyDeid", "unknown_name_pydeid", {}
+
+    if provider_name_alias_profile is not None and provider_name_identities is not None and span.label == "NAME":
         return span.replacement or "<PHI>", "pyDeid", "unknown_name_pydeid", {}
 
     # Final fallback for all other spans.
