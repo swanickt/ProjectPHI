@@ -2,8 +2,13 @@
 
 import csv
 
-from project_phi import deidentify_csv, deidentify_note
+from project_phi import PHISpan, deidentify_csv, deidentify_note
 import project_phi.note as note_module
+import project_phi.reconstruction as reconstruction
+from project_phi.provider_names import (
+    _build_provider_alias_profile,
+    _stable_provider_name_identities,
+)
 from conftest import _read_csv, _write_csv
 
 
@@ -69,6 +74,116 @@ def test_residual_provider_full_alias_replaces_without_role_context(monkeypatch)
     assert provider_spans[0].text == "Lena Shore"
     assert "Lena Shore" not in result.deidentified_text
     assert provider_spans[0].metadata["alias_match_type"] == "full"
+
+
+def _provider_profile_and_identities(aliases_by_provider_id):
+    profile = _build_provider_alias_profile(aliases_by_provider_id)
+    identities = _stable_provider_name_identities(
+        profile,
+        secret=b"synthetic-provider-secret",
+    )
+    return profile, identities
+
+
+def _name_span(note, text, replacement="Donald Dunn"):
+    start = note.index(text)
+    return PHISpan(
+        start=start,
+        end=start + len(text),
+        text=text,
+        label="NAME",
+        source="pyDeid",
+        replacement=replacement,
+        pydeid_types=["Custom Doctor Last Name"],
+        metadata={
+            "pydeid_replacement": replacement,
+            "pydeid_surrogate_start": 0,
+            "pydeid_surrogate_end": len(replacement),
+        },
+    )
+
+
+def test_provider_alias_span_preserves_trailing_lowercase_action_word():
+    note = "Nurse Taylor reviewed wound care."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-taylor": ["Taylor"]}
+    )
+    span = _name_span(note, "Taylor reviewed")
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert "Taylor" not in text
+    assert "reviewed wound care" in text
+    assert text.startswith("Nurse ")
+    assert spans[0].metadata["replacement_source"] == "project_stable_provider_name"
+    assert spans[0].metadata["project_name_policy"] == "known_provider_alias"
+    assert spans[0].metadata["name_role"] == "known_provider_alias"
+    assert spans[0].metadata["alias_match_type"] == "single_token_trailing_action"
+    start = spans[0].metadata["project_replacement_start"]
+    end = spans[0].metadata["project_replacement_end"]
+    assert text[start:end] == spans[0].replacement
+
+
+def test_provider_full_alias_span_preserves_trailing_lowercase_action_word():
+    note = "Dr. Lena Shore reviewed mammography."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-shore": ["Lena Shore"]}
+    )
+    span = _name_span(note, "Lena Shore reviewed")
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert "Lena Shore" not in text
+    assert "reviewed mammography" in text
+    assert spans[0].metadata["alias_match_type"] == "full_trailing_action"
+
+
+def test_provider_trailing_action_rescue_does_not_preserve_capitalized_surname():
+    note = "Nurse Taylor Cook reviewed wound care."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-taylor": ["Taylor"], "Provider/synth-cook": ["Cook"]}
+    )
+    span = _name_span(note, "Taylor Cook")
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert "Taylor Cook" not in text
+    assert "Cook reviewed" not in text
+    assert "reviewed wound care" in text
+    assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
+def test_provider_trailing_action_rescue_requires_following_context():
+    note = "Nurse Taylor reviewed."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-taylor": ["Taylor"]}
+    )
+    span = _name_span(note, "Taylor reviewed")
+
+    text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert text == "Nurse Donald Dunn."
+    assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
 def test_csv_provider_aliases_write_sanitized_audit_rows(tmp_path, monkeypatch):

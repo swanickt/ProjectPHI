@@ -5,6 +5,11 @@ helpers here can replace exact configured provider names that pyDeid emits or
 misses, while unknown names remain pyDeid behavior. Single-token aliases such
 as `Chen`, `Green`, or `Cook` require nearby provider-role context so common
 ordinary words are not replaced globally.
+
+The module also handles a narrow semantic-preservation case where pyDeid emits
+one name span containing both a configured provider alias and a lower-case
+clinical verb. In that case, the alias can be replaced while the verb is kept
+when role and following clinical-context guards pass.
 """
 
 from __future__ import annotations
@@ -21,6 +26,11 @@ from .patient_names import (
     _normalize_alias,
     _range_overlaps_any,
     _stable_patient_name_identity_from_faker,
+)
+from .title_context import (
+    _CLINICAL_ACTION_WORDS,
+    _following_context_type,
+    _normalize_action_word,
 )
 
 _PROVIDER_ROLE_CONTEXTS = (
@@ -266,6 +276,15 @@ def _project_provider_name_replacement(
     provider_name_identities: dict[str, dict[str, str]],
 ) -> tuple[str, str] | None:
     """Return a stable provider-name replacement for a configured alias span."""
+    trailing_action_replacement = _project_provider_trailing_action_replacement(
+        span,
+        original_text=original_text,
+        provider_alias_profile=provider_alias_profile,
+        provider_name_identities=provider_name_identities,
+    )
+    if trailing_action_replacement is not None:
+        return trailing_action_replacement
+
     normalized = _normalize_alias(span.text)
     alias_info = provider_alias_profile["aliases"].get(normalized)
     if alias_info is None:
@@ -290,6 +309,81 @@ def _project_provider_name_replacement(
     if alias_info["match_type"] == "given":
         return identity["given"], "given"
     return identity["family"], "single_token"
+
+
+def _project_provider_trailing_action_replacement(
+    span: PHISpan,
+    *,
+    original_text: str,
+    provider_alias_profile: dict[str, Any],
+    provider_name_identities: dict[str, dict[str, str]],
+) -> tuple[str, str] | None:
+    """Preserve a lower-case clinical verb swallowed into a provider-name span.
+
+    This is deliberately narrower than the general title/action veto. It only
+    applies when the beginning of the pyDeid name span is an explicit provider
+    alias, the alias has provider-role context, and the final token is a
+    lower-case clinical action word followed by clinical/generic-patient
+    context. Capitalized tokens such as surnames are left to normal provider or
+    pyDeid replacement.
+    """
+    match = re.match(r"^(?P<alias>.+?)(?P<separator>\s+)(?P<action>[A-Za-z]+[.,;:]?)$", span.text)
+    if match is None:
+        return None
+
+    action_text = match.group("action")
+    stripped_action = action_text.strip(".,;:")
+    if not stripped_action.isalpha() or not stripped_action.islower():
+        return None
+
+    normalized_action = _normalize_action_word(action_text)
+    if normalized_action not in _CLINICAL_ACTION_WORDS:
+        return None
+    if normalized_action in provider_alias_profile["aliases"]:
+        return None
+
+    alias_text = match.group("alias")
+    normalized_alias = _normalize_alias(alias_text)
+    alias_info = provider_alias_profile["aliases"].get(normalized_alias)
+    if alias_info is None:
+        return None
+    if not _has_provider_role_context(
+        original_text,
+        span.start,
+        span.start + match.end("alias"),
+    ):
+        return None
+
+    action_start = span.start + match.start("action")
+    action_span = PHISpan(
+        start=action_start,
+        end=span.start + match.end("action"),
+        text=action_text,
+        label=span.label,
+        source=span.source,
+        pydeid_types=span.pydeid_types,
+    )
+    if _following_context_type(action_span, original_text=original_text) is None:
+        return None
+
+    identity = provider_name_identities[alias_info["provider_id"]]
+    replacement_text = _provider_alias_replacement_text(alias_info, identity)
+    return (
+        f"{replacement_text}{match.group('separator')}{action_text}",
+        f"{alias_info['match_type']}_trailing_action",
+    )
+
+
+def _provider_alias_replacement_text(
+    alias_info: dict[str, str],
+    identity: dict[str, str],
+) -> str:
+    """Return the fake provider-name component matching the alias granularity."""
+    if alias_info["match_type"] == "full":
+        return identity["full"]
+    if alias_info["match_type"] == "given":
+        return identity["given"]
+    return identity["family"]
 
 
 def _component_alias_info_inside_full_alias(
