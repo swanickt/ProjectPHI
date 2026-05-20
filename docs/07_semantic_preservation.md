@@ -1,0 +1,182 @@
+# Semantic Preservation
+
+## Purpose
+
+The pipeline is designed for internal training-candidate preparation where
+clinical meaning matters. The goal is not to delete every suspicious string at
+any cost. The goal is to reduce obvious identifier risk while preserving
+clinically useful structure and terminology.
+
+## Date Semantics
+
+Stable date shifting uses pyDeid-detected date spans and applies one
+patient-specific offset across a patient's notes. This preserves within-patient
+date intervals, unlike independent random replacement.
+
+The project shifts parseable full dates, including ISO-style dates and common
+English month-name dates in both month-day-year and day-month-year forms, only
+when pyDeid has already emitted a date span. Examples include
+`March 14, 2026` and `8 August 2019`. It also shifts pyDeid-detected
+month/year spans such as `March 2021` while preserving month/year granularity.
+Month/year shifting uses the same patient-specific day offset as full dates
+with an internal day-15 anchor, then outputs only `Month YYYY`.
+
+The project does not add a separate date detector. Year-only mentions, times,
+seasons, and holidays are preserved by default.
+
+Some clinical scores and ratios use date-like slash notation. When pyDeid emits
+text such as `1/50`, `11/50`, `1/61`, or `6/60` as a date-like span, ProjectPHI
+checks bounded local context for score, scale, staging, node-count, ratio, or
+visual-acuity cues. If those cues are present, it preserves the original
+notation instead of shifting it to a month/year phrase. This is still
+span-local; it does not scan the full note for new scores. Three-part
+Apgar-style slash scores such as `4/7/10` are preserved only when nearby text
+also contains Apgar wording and 1/5/10-minute timing cues, so ordinary slash
+dates remain eligible for stable date shifting. Tumor-marker fragments such as
+`CA 15-3` are preserved only when bounded local context indicates tumor-marker
+use.
+
+## Clinical Abbreviation Semantics
+
+pyDeid can emit `PMH` as a site acronym inside `PMHx`. ProjectPHI preserves the
+pyDeid-emitted `PMH` span when it is immediately followed by `x` or `X`, so the
+common clinical shorthand `PMHx` remains intact. ProjectPHI also preserves
+standalone `PMH` only in bounded past-medical-history context, and selected
+short abbreviations such as `NIA`/`AA` in `NIA-AA`, `SAH`, `MSH`, `WES`, `SAM`,
+or `AMAN` only when nearby context supports a specific clinical meaning.
+
+## Obstetric-History Semantics
+
+Strict obstetric-history shorthand such as `G1P0A0` is clinically meaningful
+and can look like an identifier. ProjectPHI preserves pyDeid-emitted spans that
+exactly match conservative `G/P/A/L/T` shorthand patterns. It does not scan the
+full note for these patterns and does not preserve arbitrary alphanumeric study
+codes.
+
+## Ordinary-Token Semantics
+
+pyDeid can sometimes emit very short ordinary tokens as `NAME` spans. ProjectPHI
+preserves a small set of high-confidence articles and pronouns, such as `a`,
+`An`, `He`, and `Her`, when local context does not look like an initial or case
+label. It also preserves `NH` only in guarded nursing-home shorthand contexts.
+
+This is intentionally conservative. ProjectPHI does not preserve arbitrary
+short uppercase tokens, and it does not override pyDeid in contexts such as
+`A. Smith`, `Dr. A`, `Patient A`, `Subject A`, or `Case A`.
+
+## Patient Name Semantics
+
+Stable patient-name surrogates require explicit aliases. The wrapper does not infer
+patient aliases from notes because notes may contain patient, clinician, family,
+copied-correspondence, facility, and organization names.
+
+When aliases are missing and stable patient-name surrogates are enabled for CSV,
+the row fails through the sanitized row-failure path. If stable patient-name
+surrogates are disabled, pyDeid still replaces names, but those replacements may
+not be stable across notes for the same patient.
+
+For explicit patient aliases, the project uses a deterministic Faker-generated
+fake identity keyed by `patient_id` and a runtime secret. The replacement is
+role-preserving but not gender-concordant: the wrapper does not infer gender
+from breast oncology context, names, pronouns, or diagnosis because that would
+add an unvalidated inference layer and can create incorrect assumptions.
+
+## Protected Clinical Terms
+
+Protected clinical terms reduce false positives where pyDeid flags clinically
+meaningful text as PHI. The mechanism is span-local:
+
+- it inspects only pyDeid-detected/pruned spans;
+- it uses exact normalized whole-span matching;
+- it does not scan the full note;
+- it does not create new spans;
+- it does not use fuzzy matching, stemming, NER, or LLMs.
+
+The current built-in list is manually curated, general, and non-site-specific.
+It covers selected breast imaging/mammography, breast imaging findings,
+breast cancer pathology, receptor/biomarker status, staging,
+metastasis/recurrence, systemic/endocrine therapy, radiology/imaging,
+treatment, surgery/radiation, disease-status terms, selected clinical
+tools/scales/criteria, and selected phrase-bound scientific fragments.
+
+Some clinical tools contain words that are also plausible names or places, such
+as `Chelsea` in `Chelsea Critical Care Physical Assessment Tool`. ProjectPHI
+does not protect those components globally. Instead, phrase-component
+protection can preserve the pyDeid-emitted component only when the bounded
+source-text context matches an approved clinical phrase. This keeps the rule
+span-local and avoids turning risky eponyms into blanket allow-list entries.
+The same approach is used for selected observed fragments such as `Paddick` in
+`Paddick index`, `SAFA` in `SAFA-A`, `von` in `von Willebrand factor`, `veno`
+in `veno-venous`, `hemi` in `hemi-abdomen`, and `dermo` in
+`dermo-hypodermal`.
+
+Residual risk is explicit: a rare person, facility, or organization could share
+a protected clinical term. That tradeoff is accepted only for internal
+training-candidate generation and should be reviewed before governed use.
+
+The built-in list is now considered the stable public baseline. Further
+semantic-preservation expansion should generally be driven by governed local
+evaluation and supplied as runtime protected-term CSV artifacts. 
+
+## Title-Context Action Words
+
+pyDeid can sometimes treat clinical action words after short titles as name
+spans, for example `examined` in `The Dr. examined the patient`, `reviewed` in
+`Dr. Solen reviewed mammography`, or `Reviewed` in `Dr. Reviewed mammography`.
+ProjectPHI adds a narrow span-local veto for this false-positive class,
+including selected clinical-role contexts such as nurse, surgeon, oncologist,
+radiologist, pathologist, pharmacist, physiotherapist, and social worker.
+
+The veto only applies to pyDeid-emitted title-derived `NAME` spans. It requires
+an exact match to a curated clinical/documentation action-word list, a narrow
+`Dr.` or clinical-role context, no explicit custom/patient alias, and absence
+from pyDeid name lists. Lower-case action words use the base `Dr.` rule.
+Capitalized action words are preserved only when specific clinical-object
+context follows, such as `mammography`, `chest wall`, `skin toxicity`, or
+`stable disease`, or when generic patient/person context follows, such as
+`the patient` or `the family`. It does not scan the full note. If pyDeid also
+emits the following clinical object as a title-derived name span, ProjectPHI can
+preserve that adjacent object as part of the same false-positive title/action
+pattern. It can also preserve a lower-case action word immediately after a
+replaced role/title name span, such as preserving `reviewed` in
+`Nurse <name> reviewed wound care`.
+
+A separate, narrower title-token-fragment veto preserves non-identifying `Dr.`
+fragments when pyDeid splits the title token itself into name spans, for
+example after `family physician`. This keeps text such as
+`family physician Dr. <name surrogate>` readable while the clinician name still
+uses pyDeid replacement.
+
+This prioritizes semantic preservation for common documentation verbs while
+keeping pyDeid replacement as the fallback in ambiguous cases.
+
+## External Terminology Source Policy
+
+Larger externally derived protected-term lists should be governed runtime
+artifacts passed with `--protected-clinical-terms-csv`, not committed to the
+public repository.
+
+pyDeid internal wordlists, including `sno_edited.txt`, are used only through
+pyDeid runtime behavior. 
+
+Recommended sidecar metadata for governed protected-term CSV artifacts:
+
+```json
+{
+  "artifact_version": "synthetic-2026-05-16",
+  "review_status": "reviewed",
+  "governance_owner": "approved curator role",
+  "approval_review_date": "2026-05-16",
+  "sources": [
+    {
+      "source_name": "Synthetic terminology source",
+      "source_version": "example",
+      "source_release_date": "2026-05-01",
+      "source_url": "https://example.invalid/synthetic-source",
+      "source_license": "example license",
+      "extraction_date": "2026-05-16",
+      "extraction_method": "documented exact-term extraction and manual review"
+    }
+  ]
+}
+```
