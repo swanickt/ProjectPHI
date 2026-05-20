@@ -1,22 +1,7 @@
-"""CSV adapter behavior tests using synthetic inputs only.
+"""CSV adapter behavior tests.
 
-These tests cover `deidentify_csv(...)`, the row-wise CSV adapter around the
-single-note `deidentify_note(...)` workflow.
-
-Main contracts covered:
-- the configured note-text column is replaced for successful rows;
-- all other CSV columns and successful row order are preserved;
-- missing required columns and unsafe path combinations fail clearly;
-- optional patient/encounter/note IDs are copied into audit rows;
-- summary counts reflect rows read/written/failed and span audit rows;
-- stable date shifting works across CSV rows and preserves within-patient order;
-- stable patient-name aliases are selected per row by `patient_id`;
-- protected clinical terms and project replacement metadata appear in audit rows;
-- unknown names remain pyDeid replacements when not explicit patient aliases;
-- stable date and stable patient-name policies can run together.
-
-Privacy-specific audit assertions live in separate test files. All examples are
-synthetic.
+These tests cover row-wise use of `deidentify_note(...)` while preserving CSV
+columns and summaries. Privacy-specific audit assertions live separately.
 """
 
 from datetime import date
@@ -24,14 +9,11 @@ from datetime import date
 import pytest
 
 from project_phi import deidentify_csv
+import project_phi.note as note_module
 from conftest import _read_csv, _write_csv
 
 
-# Basic CSV shape, validation, and summary behavior.
-
-
 def test_deidentify_csv_replaces_note_text_and_preserves_columns(tmp_path):
-    """Successful rows preserve column order and replace only the note-text column."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     rows = [
@@ -57,9 +39,7 @@ def test_deidentify_csv_replaces_note_text_and_preserves_columns(tmp_path):
     assert summary["rows_written"] == 1
     assert summary["rows_failed"] == 0
 
-
 def test_deidentify_csv_missing_note_column_fails_clearly(tmp_path):
-    """A CSV missing the configured note-text column raises a clear ValueError."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     _write_csv(input_file, [{"patient_id": "Patient/synth-003", "body": "Test MRN: 011-0111."}])
@@ -67,9 +47,7 @@ def test_deidentify_csv_missing_note_column_fails_clearly(tmp_path):
     with pytest.raises(ValueError, match="note_text"):
         deidentify_csv(input_file, output_file)
 
-
 def test_deidentify_csv_rejects_audit_path_matching_input(tmp_path):
-    """The audit output path cannot be the same as the input CSV path."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     _write_csv(input_file, [{"patient_id": "Patient/synth-007", "note_text": "Test MRN: 011-0111."}])
@@ -77,9 +55,7 @@ def test_deidentify_csv_rejects_audit_path_matching_input(tmp_path):
     with pytest.raises(ValueError, match="audit_output_file and input_file"):
         deidentify_csv(input_file, output_file, audit_output_file=input_file)
 
-
 def test_deidentify_csv_rejects_audit_path_matching_output(tmp_path):
-    """The audit output path cannot be the same as the de-identified output path."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     _write_csv(input_file, [{"patient_id": "Patient/synth-008", "note_text": "Test MRN: 011-0111."}])
@@ -87,9 +63,7 @@ def test_deidentify_csv_rejects_audit_path_matching_output(tmp_path):
     with pytest.raises(ValueError, match="audit_output_file and output_file"):
         deidentify_csv(input_file, output_file, audit_output_file=output_file)
 
-
 def test_deidentify_csv_passes_optional_identifiers_to_audit(tmp_path):
-    """Optional patient, encounter, and note IDs are copied into audit rows."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -111,9 +85,7 @@ def test_deidentify_csv_passes_optional_identifiers_to_audit(tmp_path):
     assert audit_rows[0]["encounter_id"] == "Encounter/synth-004"
     assert audit_rows[0]["note_id"] == "Note/synth-004"
 
-
 def test_deidentify_csv_summary_counts(tmp_path):
-    """Summary counts reflect processed rows and span audit rows."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -141,12 +113,7 @@ def test_deidentify_csv_summary_counts(tmp_path):
     assert summary["spans_written"] == len(_read_csv(audit_file))
     assert summary["warnings"] == []
 
-
-# Stable date-shift behavior through the CSV adapter.
-
-
 def test_deidentify_csv_stable_date_shift_replaces_full_date(tmp_path):
-    """Stable date shifting replaces full-date spans in CSV note text."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     rows = [
@@ -172,9 +139,7 @@ def test_deidentify_csv_stable_date_shift_replaces_full_date(tmp_path):
     assert summary["rows_failed"] == 0
     assert "2001-12-10" not in output_rows[0]["note_text"]
 
-
 def test_deidentify_csv_stable_date_shift_secret_env_var(tmp_path, monkeypatch):
-    """CSV date shifting can resolve its secret from an environment variable."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     monkeypatch.setenv("PROJECT_PHI_CSV_DATE_SECRET", "synthetic-secret")
@@ -196,9 +161,7 @@ def test_deidentify_csv_stable_date_shift_secret_env_var(tmp_path, monkeypatch):
     output_rows = _read_csv(output_file)
     assert "2001-12-10" not in output_rows[0]["note_text"]
 
-
 def test_deidentify_csv_stable_date_shift_same_patient_preserves_order(tmp_path):
-    """Rows for the same patient use one offset, preserving date ordering."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     rows = [
@@ -230,12 +193,7 @@ def test_deidentify_csv_stable_date_shift_same_patient_preserves_order(tmp_path)
     assert shifted_dates[1] - shifted_dates[0] == date(2002, 1, 9) - date(2001, 12, 10)
     assert shifted_dates[0] < shifted_dates[1]
 
-
-# Stable patient-name behavior through the CSV adapter.
-
-
 def test_deidentify_csv_stable_patient_names_use_row_specific_aliases(tmp_path):
-    """Stable patient-name mode selects aliases by the row's patient ID."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     rows = [
@@ -262,111 +220,65 @@ def test_deidentify_csv_stable_patient_names_use_row_specific_aliases(tmp_path):
     assert "Zylanda" not in output_rows[0]["note_text"]
     assert "Qorven" not in output_rows[0]["note_text"]
 
-
-def test_deidentify_csv_stable_patient_names_same_patient_consistent(tmp_path):
-    """Rows for the same patient reuse the same fake given-name component."""
-    input_file = tmp_path / "input.csv"
-    output_file = tmp_path / "output.csv"
-    rows = [
-        {
-            "patient_id": "Patient/synth-csv-name-002",
-            "note_id": "Note/synth-csv-name-002a",
-            "note_text": "Patient Zylanda Qorven attended.",
-        },
-        {
-            "patient_id": "Patient/synth-csv-name-002",
-            "note_id": "Note/synth-csv-name-002b",
-            "note_text": "Zylanda returned.",
-        },
-    ]
-    _write_csv(input_file, rows)
-
-    deidentify_csv(
-        input_file,
-        output_file,
-        stable_patient_name_surrogates=True,
-        patient_aliases_by_patient_id={"Patient/synth-csv-name-002": ["Zylanda Qorven"]},
-        patient_name_secret="synthetic-secret",
-    )
-
-    output_rows = _read_csv(output_file)
-    fake_given_from_full = output_rows[0]["note_text"].removeprefix("Patient ").split()[0]
-    fake_given_only = output_rows[1]["note_text"].removesuffix(" returned.")
-    assert fake_given_only == fake_given_from_full
-
-
-def test_deidentify_csv_stable_patient_names_different_patients_differ(tmp_path):
-    """Different patients usually receive different stable fake identities."""
-    input_file = tmp_path / "input.csv"
-    output_file = tmp_path / "output.csv"
-    rows = [
-        {
-            "patient_id": "Patient/synth-csv-name-003a",
-            "note_id": "Note/synth-csv-name-003a",
-            "note_text": "Patient Zylanda Qorven attended.",
-        },
-        {
-            "patient_id": "Patient/synth-csv-name-003b",
-            "note_id": "Note/synth-csv-name-003b",
-            "note_text": "Patient Marvella Daxen attended.",
-        },
-    ]
-    _write_csv(input_file, rows)
-
-    deidentify_csv(
-        input_file,
-        output_file,
-        stable_patient_name_surrogates=True,
-        patient_aliases_by_patient_id={
-            "Patient/synth-csv-name-003a": ["Zylanda Qorven"],
-            "Patient/synth-csv-name-003b": ["Marvella Daxen"],
-        },
-        patient_name_secret="synthetic-secret",
-    )
-
-    output_rows = _read_csv(output_file)
-    assert output_rows[0]["note_text"] != output_rows[1]["note_text"]
-
-
-def test_deidentify_csv_stable_patient_names_unknown_name_uses_pydeid(tmp_path):
-    """Unknown names in stable patient-name mode remain pyDeid replacements."""
+def test_deidentify_csv_stable_patient_names_residual_aliases_are_audited(
+    tmp_path, monkeypatch
+):
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
     rows = [
         {
-            "patient_id": "Patient/synth-csv-name-004",
-            "note_id": "Note/synth-csv-name-004",
-            "note_text": "Patient Zylanda Qorven met Xavion Norel.",
+            "patient_id": "Patient/synth-csv-residual-name-001",
+            "encounter_id": "Encounter/synth-csv-residual-name-001",
+            "note_id": "Note/synth-csv-residual-name-001",
+            "note_text": "Patient Amelia Rowan attended. Amelia returned.",
         }
     ]
     _write_csv(input_file, rows)
 
-    deidentify_csv(
+    def fake_pydeid(note_text, **_kwargs):
+        return [], note_text
+
+    monkeypatch.setattr(note_module, "run_pydeid_deid_string", fake_pydeid)
+
+    summary = deidentify_csv(
         input_file,
         output_file,
         audit_output_file=audit_file,
         stable_patient_name_surrogates=True,
-        patient_aliases_by_patient_id={"Patient/synth-csv-name-004": ["Zylanda Qorven"]},
+        patient_aliases_by_patient_id={
+            "Patient/synth-csv-residual-name-001": ["Amelia Rowan", "Amelia", "Rowan"]
+        },
         patient_name_secret="synthetic-secret",
-        custom_dr_first_names={"Xavion"},
-        custom_dr_last_names={"Norel"},
     )
 
+    output_rows = _read_csv(output_file)
     audit_rows = _read_csv(audit_file)
-    unknown_name_rows = [
-        row for row in audit_rows if row["label"] == "NAME" and row["name_role"] == "unknown_name"
+    residual_rows = [
+        row
+        for row in audit_rows
+        if row["replacement_source"] == "project_residual_patient_alias"
     ]
-    assert unknown_name_rows
-    assert all(row["replacement_source"] == "pyDeid" for row in unknown_name_rows)
-    assert all(row["project_name_policy"] == "unknown_name_pydeid" for row in unknown_name_rows)
-
-
-# Protected-term and combined policy behavior.
-
+    audit_text = audit_file.read_text(encoding="utf-8")
+    assert summary["rows_read"] == 1
+    assert summary["rows_written"] == 1
+    assert summary["rows_failed"] == 0
+    assert "Amelia" not in output_rows[0]["note_text"]
+    assert "Rowan" not in output_rows[0]["note_text"]
+    assert len(residual_rows) == 2
+    assert {row["alias_match_type"] for row in residual_rows} == {"full", "given"}
+    for row in residual_rows:
+        assert row["patient_id"] == "Patient/synth-csv-residual-name-001"
+        assert row["encounter_id"] == "Encounter/synth-csv-residual-name-001"
+        assert row["note_id"] == "Note/synth-csv-residual-name-001"
+        assert row["project_name_policy"] == "residual_explicit_patient_alias"
+        assert row["name_role"] == "known_patient_alias"
+        assert row["project_replacement_start"]
+        assert row["project_replacement_end"]
+    assert "Amelia" not in audit_text
+    assert "Rowan" not in audit_text
 
 def test_deidentify_csv_passes_protected_clinical_terms_and_writes_audit(tmp_path):
-    """Built-in protected terms are preserved and recorded in audit rows."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"
@@ -401,9 +313,100 @@ def test_deidentify_csv_passes_protected_clinical_terms_and_writes_audit(tmp_pat
     assert protected_rows[0]["project_protected_term_rule_id"] == "breast_imaging_mammography"
     assert protected_rows[0]["project_protected_term_category"] == "breast_imaging_mammography"
 
+def test_deidentify_csv_stable_patient_names_same_patient_consistent(tmp_path):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    rows = [
+        {
+            "patient_id": "Patient/synth-csv-name-002",
+            "note_id": "Note/synth-csv-name-002a",
+            "note_text": "Patient Zylanda Qorven attended.",
+        },
+        {
+            "patient_id": "Patient/synth-csv-name-002",
+            "note_id": "Note/synth-csv-name-002b",
+            "note_text": "Zylanda returned.",
+        },
+    ]
+    _write_csv(input_file, rows)
+
+    deidentify_csv(
+        input_file,
+        output_file,
+        stable_patient_name_surrogates=True,
+        patient_aliases_by_patient_id={"Patient/synth-csv-name-002": ["Zylanda Qorven"]},
+        patient_name_secret="synthetic-secret",
+    )
+
+    output_rows = _read_csv(output_file)
+    fake_given_from_full = output_rows[0]["note_text"].removeprefix("Patient ").split()[0]
+    fake_given_only = output_rows[1]["note_text"].removesuffix(" returned.")
+    assert fake_given_only == fake_given_from_full
+
+def test_deidentify_csv_stable_patient_names_different_patients_differ(tmp_path):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    rows = [
+        {
+            "patient_id": "Patient/synth-csv-name-003a",
+            "note_id": "Note/synth-csv-name-003a",
+            "note_text": "Patient Zylanda Qorven attended.",
+        },
+        {
+            "patient_id": "Patient/synth-csv-name-003b",
+            "note_id": "Note/synth-csv-name-003b",
+            "note_text": "Patient Marvella Daxen attended.",
+        },
+    ]
+    _write_csv(input_file, rows)
+
+    deidentify_csv(
+        input_file,
+        output_file,
+        stable_patient_name_surrogates=True,
+        patient_aliases_by_patient_id={
+            "Patient/synth-csv-name-003a": ["Zylanda Qorven"],
+            "Patient/synth-csv-name-003b": ["Marvella Daxen"],
+        },
+        patient_name_secret="synthetic-secret",
+    )
+
+    output_rows = _read_csv(output_file)
+    assert output_rows[0]["note_text"] != output_rows[1]["note_text"]
+
+def test_deidentify_csv_stable_patient_names_unknown_name_uses_pydeid(tmp_path):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    audit_file = tmp_path / "audit.csv"
+    rows = [
+        {
+            "patient_id": "Patient/synth-csv-name-004",
+            "note_id": "Note/synth-csv-name-004",
+            "note_text": "Patient Zylanda Qorven met Xavion Norel.",
+        }
+    ]
+    _write_csv(input_file, rows)
+
+    deidentify_csv(
+        input_file,
+        output_file,
+        audit_output_file=audit_file,
+        stable_patient_name_surrogates=True,
+        patient_aliases_by_patient_id={"Patient/synth-csv-name-004": ["Zylanda Qorven"]},
+        patient_name_secret="synthetic-secret",
+        custom_dr_first_names={"Xavion"},
+        custom_dr_last_names={"Norel"},
+    )
+
+    audit_rows = _read_csv(audit_file)
+    unknown_name_rows = [
+        row for row in audit_rows if row["label"] == "NAME" and row["name_role"] == "unknown_name"
+    ]
+    assert unknown_name_rows
+    assert all(row["replacement_source"] == "pyDeid" for row in unknown_name_rows)
+    assert all(row["project_name_policy"] == "unknown_name_pydeid" for row in unknown_name_rows)
 
 def test_deidentify_csv_stable_dates_and_patient_names(tmp_path):
-    """Stable date shifting and patient-name replacement can run together."""
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"
     audit_file = tmp_path / "audit.csv"

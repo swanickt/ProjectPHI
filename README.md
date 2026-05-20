@@ -21,13 +21,13 @@ Key pages:
 
 - [Pipeline overview](docs/01_pipeline_overview.md)
 - [Architecture](docs/02_architecture.md)
-- [pyDeid behavior](docs/03_pydeid_behavior.md)
-- [ProjectPHI behavior](docs/04_ProjectPHI_behavior.md)
+- [pyDeid behaviour](docs/03_pydeid_behaviour.md)
+- [ProjectPHI behaviour](docs/04_ProjectPHI_behaviour.md)
 - [Configuration](docs/05_configuration.md)
 - [Privacy and audit notes](docs/06_privacy_and_audit_notes.md)
 - [Semantic preservation](docs/07_semantic_preservation.md)
-- [Examples](docs/09_examples.md)
-- [Current limitations](docs/10_current_limitations.md)
+- [Examples](docs/08_examples.md)
+- [Current limitations](docs/09_current_limitations.md)
 
 ## Current Capabilities
 
@@ -39,8 +39,9 @@ Key pages:
   metadata, and project-final replacement metadata kept separate.
 - Stable per-patient date shifting for pyDeid-detected parseable full dates and
   month/year spans.
-- Stable patient-name surrogates for explicit patient aliases that pyDeid
-  emits as final spans.
+- Stable patient-name surrogates for explicit patient aliases, including a
+  bounded exact residual pass for supplied aliases that pyDeid prunes before
+  ProjectPHI sees them.
 - Protected clinical-term and narrow title/context false-positive vetoes for
   observed semantic-preservation failures.
 - Runtime config loaders for patient alias manifests, custom regex JSON, and
@@ -174,7 +175,7 @@ The CLI prints only summary counts and sanitized warnings. It does not accept
 direct secret values on the command line; pass environment-variable names for
 stable replacement modes.
 
-More examples are in [docs/09_examples.md](docs/09_examples.md), including
+More examples are in [docs/08_examples.md](docs/08_examples.md), including
 bulk CSV processing, stable date shifting, stable patient-name surrogates,
 custom regex pass-through, and protected clinical terms.
 
@@ -191,8 +192,8 @@ randomized surrogate values.
 
 - Stable date shifting only applies to pyDeid-detected date spans that the
   project can safely parse.
-- Stable patient-name surrogates only apply to explicit aliases that pyDeid
-  detects as final spans.
+- Stable patient-name surrogates require explicit aliases and do not infer
+  aliases, clinician names, family names, or other people from note text.
 - Custom regex support is a pyDeid pass-through mechanism; no real
   Sunnybrook/Ontario regex families are included at the moment.
 - Protected clinical terms are semantic-preservation vetoes, not compliance

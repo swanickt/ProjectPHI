@@ -1,7 +1,10 @@
-"""Stable patient-name surrogate helpers for explicit pyDeid-detected aliases.
+"""Stable patient-name surrogate helpers for explicit patient aliases.
 
 The policy is intentionally conservative: explicit patient aliases can receive
 a stable fake identity, while unknown names remain pyDeid-only replacements.
+Alias-derived pyDeid custom name lists are tried first; a bounded exact
+residual pass handles supplied aliases that pyDeid pruned before ProjectPHI
+could replace them.
 """
 
 from __future__ import annotations
@@ -9,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 from typing import Any, Iterable
 
 from .models import PHISpan
@@ -225,6 +229,90 @@ def _merge_patient_alias_custom_names(
     return first_names, last_names
 
 
+def _residual_patient_alias_spans(
+    original_text: str,  # Full original note text to check for explicit aliases.
+    alias_profile: dict[str, Any],  # Normalized explicit-alias profile.
+    existing_spans: list[PHISpan],  # pyDeid-emitted spans already selected.
+    *,
+    patient_id: str | None = None,  # Optional row/note patient identifier for audit metadata.
+    encounter_id: str | None = None,  # Optional encounter identifier for audit metadata.
+    note_id: str | None = None,  # Optional note identifier for audit metadata.
+) -> list[PHISpan]:
+    """Return synthetic spans for explicit aliases pyDeid did not emit.
+
+    This is intentionally narrower than a name detector: it checks only aliases
+    supplied by the caller for the current patient and uses bounded exact
+    matching. It does not infer names or inspect unknown names. Longer aliases
+    are considered first so a full alias wins over its given/family components.
+    """
+    occupied_ranges = [(span.start, span.end) for span in existing_spans]
+    residual_spans: list[PHISpan] = []
+    candidates = _residual_alias_candidates(alias_profile)
+
+    for normalized_alias in candidates:
+        pattern = _residual_alias_pattern(normalized_alias)
+        for match in pattern.finditer(original_text):
+            span_range = (match.start(), match.end())
+            if _range_overlaps_any(span_range, occupied_ranges):
+                continue
+            text = original_text[match.start() : match.end()]
+            residual_spans.append(
+                PHISpan(
+                    start=match.start(),
+                    end=match.end(),
+                    text=text,
+                    label="NAME",
+                    source="ProjectPHI.residual_alias",
+                    pydeid_types=["Project residual patient alias"],
+                    metadata={
+                        "residual_alias": True,
+                        "patient_id": patient_id,
+                        "encounter_id": encounter_id,
+                        "note_id": note_id,
+                    },
+                )
+            )
+            occupied_ranges.append(span_range)
+
+    return residual_spans
+
+
+def _residual_alias_candidates(
+    alias_profile: dict[str, Any],  # Normalized explicit-alias profile.
+) -> list[str]:
+    """Return normalized aliases sorted so longer phrases are matched first."""
+    aliases = set()
+    aliases.update(alias_profile["full_aliases"])
+    aliases.update(alias_profile["title_family_aliases"])
+    aliases.update(alias_profile["given_names"])
+    aliases.update(alias_profile["family_names_explicit"])
+    return sorted(aliases, key=lambda item: (len(item.split()), len(item)), reverse=True)
+
+
+def _residual_alias_pattern(
+    normalized_alias: str,  # Normalized explicit alias.
+) -> re.Pattern[str]:
+    """Build a bounded exact regex for one normalized alias."""
+    parts = normalized_alias.split()
+    pattern_parts = []
+    for index, part in enumerate(parts):
+        escaped = re.escape(part)
+        if index == 0 and part in _NAME_TITLES:
+            escaped = f"{escaped}\\.?"
+        pattern_parts.append(escaped)
+    pattern = r"(?<![A-Za-z0-9])" + r"\s+".join(pattern_parts) + r"(?![A-Za-z0-9])"
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def _range_overlaps_any(
+    candidate: tuple[int, int],  # Candidate original-note offset range.
+    ranges: list[tuple[int, int]],  # Existing occupied original-note ranges.
+) -> bool:
+    """Return true if `candidate` overlaps any existing span range."""
+    start, end = candidate
+    return any(start < existing_end and end > existing_start for existing_start, existing_end in ranges)
+
+
 def _project_patient_name_replacement(
     span: PHISpan,  # pyDeid-detected name span.
     *,
@@ -283,6 +371,12 @@ def _name_policy_metadata(
     if replacement_source == "project_stable_patient_name":
         return {
             "project_name_policy": "known_patient_alias",
+            "name_role": "known_patient_alias",
+            "alias_match_type": policy,
+        }
+    if replacement_source == "project_residual_patient_alias":
+        return {
+            "project_name_policy": "residual_explicit_patient_alias",
             "name_role": "known_patient_alias",
             "alias_match_type": policy,
         }

@@ -1,29 +1,9 @@
-"""Stable patient-name surrogate tests for explicit synthetic aliases.
-
-These tests cover ProjectPHI's stable patient-name policy.
-
-Main contracts covered:
-- stable fake identities are deterministic for the same patient/secret pair;
-- explicit patient aliases can receive project-stable replacements;
-- given-name, family-name, full-name, and title-family aliases map to the right
-  fake-name components;
-- standalone family-name replacement is conservative and requires explicit
-  alias support;
-- ambiguous single-token aliases fail closed;
-- unknown names remain pyDeid replacements instead of being treated as patient
-  aliases;
-- stable patient-name surrogates require patient ID, secret, aliases, and name
-  detection;
-- environment-variable secrets work without storing or printing the secret;
-- stable patient-name and stable date-shift policies share project reconstruction
-  while keeping offsets separate.
-
-All names, identifiers, and notes in this file are synthetic.
-"""
+"""Stable patient-name surrogate tests for explicit synthetic aliases."""
 
 import pytest
 
 from project_phi import PHISpan, deidentify_note
+import project_phi.note as note_module
 from conftest import _date_spans, _name_spans, _stable_patient_name_spans
 from project_phi.patient_names import (
     _FAKE_FAMILY_NAMES,
@@ -34,11 +14,7 @@ from project_phi.patient_names import (
 )
 
 
-# Deterministic fake identity generation.
-
-
 def test_stable_patient_name_identity_uses_larger_deterministic_pool_when_available():
-    """Stable identity generation is deterministic and prefers Faker over fallback pools."""
     first = _stable_patient_name_identity(
         patient_id="Patient/synth-name-pool-001",
         secret=b"synthetic-secret",
@@ -55,11 +31,7 @@ def test_stable_patient_name_identity_uses_larger_deterministic_pool_when_availa
     assert first["given"] not in _FAKE_GIVEN_NAMES or first["family"] not in _FAKE_FAMILY_NAMES
 
 
-# Explicit alias replacement behavior.
-
-
 def test_stable_patient_name_full_alias_uses_project_replacement_and_offsets():
-    """Full patient aliases use project replacements with original/final offsets separated."""
     note = "Patient Zylanda Qorven attended."
 
     result = deidentify_note(
@@ -86,8 +58,70 @@ def test_stable_patient_name_full_alias_uses_project_replacement_and_offsets():
         assert span.metadata["name_role"] == "known_patient_alias"
 
 
+def test_stable_patient_name_residual_alias_replaces_when_pydeid_emits_no_span(monkeypatch):
+    note = "Patient Amelia Rowan attended. Amelia returned."
+
+    def fake_pydeid(note_text, **_kwargs):
+        return [], note_text
+
+    monkeypatch.setattr(note_module, "run_pydeid_deid_string", fake_pydeid)
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-residual-name-001",
+        stable_patient_name_surrogates=True,
+        patient_aliases=["Amelia Rowan", "Amelia", "Rowan"],
+        patient_name_secret="synthetic-secret",
+    )
+
+    residual_spans = [
+        span
+        for span in result.spans
+        if span.metadata.get("replacement_source") == "project_residual_patient_alias"
+    ]
+    assert len(residual_spans) == 2
+    assert "Amelia" not in result.deidentified_text
+    assert "Rowan" not in result.deidentified_text
+    assert residual_spans[0].metadata["project_name_policy"] == "residual_explicit_patient_alias"
+    assert residual_spans[0].metadata["name_role"] == "known_patient_alias"
+    assert residual_spans[0].metadata["alias_match_type"] == "full"
+    assert residual_spans[1].metadata["alias_match_type"] == "given"
+    for span in residual_spans:
+        assert note[span.start : span.end] == span.text
+        project_start = span.metadata["project_replacement_start"]
+        project_end = span.metadata["project_replacement_end"]
+        assert result.deidentified_text[project_start:project_end] == span.replacement
+    assert result.warnings == []
+
+
+def test_stable_patient_name_residual_alias_does_not_replace_inside_longer_words(monkeypatch):
+    note = "Zylandaville clinic note. Zylanda returned."
+
+    def fake_pydeid(note_text, **_kwargs):
+        return [], note_text
+
+    monkeypatch.setattr(note_module, "run_pydeid_deid_string", fake_pydeid)
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-residual-name-002",
+        stable_patient_name_surrogates=True,
+        patient_aliases=["Zylanda"],
+        patient_name_secret="synthetic-secret",
+    )
+
+    assert "Zylandaville" in result.deidentified_text
+    assert "Zylanda returned" not in result.deidentified_text
+    residual_spans = [
+        span
+        for span in result.spans
+        if span.metadata.get("replacement_source") == "project_residual_patient_alias"
+    ]
+    assert len(residual_spans) == 1
+    assert residual_spans[0].text == "Zylanda"
+
+
 def test_stable_patient_name_surrogates_are_deterministic():
-    """The same patient, secret, aliases, and note produce the same replacements."""
     note = "Patient Zylanda Qorven attended."
     kwargs = {
         "patient_id": "Patient/synth-name-002",
@@ -104,9 +138,7 @@ def test_stable_patient_name_surrogates_are_deterministic():
         span.replacement for span in _stable_patient_name_spans(second)
     ]
 
-
 def test_stable_patient_name_full_and_given_aliases_share_fake_component():
-    """Full-name and given-name aliases share the same fake given-name component."""
     full_note = "Patient Zylanda Qorven attended."
     given_note = "Zylanda returned for review."
     kwargs = {
@@ -125,9 +157,7 @@ def test_stable_patient_name_full_and_given_aliases_share_fake_component():
     assert given_span.replacement == full_given_span.replacement
     assert given_span.metadata["alias_match_type"] == "given"
 
-
 def test_stable_patient_name_standalone_given_alias_uses_fake_given_only():
-    """A standalone given-name alias is replaced with only the fake given name."""
     note = "Zylanda returned for review."
 
     result = deidentify_note(
@@ -145,9 +175,7 @@ def test_stable_patient_name_standalone_given_alias_uses_fake_given_only():
     assert " " not in stable_spans[0].replacement
     assert result.deidentified_text == f"{stable_spans[0].replacement} returned for review."
 
-
 def test_stable_patient_name_family_alias_requires_explicit_alias():
-    """A standalone family-name span is replaced only when explicitly configured."""
     note = "Qorven returned for review."
 
     without_family_alias = deidentify_note(
@@ -171,9 +199,7 @@ def test_stable_patient_name_family_alias_requires_explicit_alias():
     assert stable_spans[0].text == "Qorven"
     assert stable_spans[0].metadata["alias_match_type"] == "family"
 
-
 def test_stable_patient_name_family_alias_with_full_name_context_uses_fake_family():
-    """Explicit family aliases reuse the fake family name from the full-name identity."""
     note = "Qorven returned for review."
     full_name_result = deidentify_note(
         "Patient Zylanda Qorven attended.",
@@ -196,9 +222,7 @@ def test_stable_patient_name_family_alias_with_full_name_context_uses_fake_famil
     assert stable_span.replacement == full_family_span.replacement
     assert stable_span.metadata["alias_match_type"] == "family"
 
-
 def test_stable_patient_name_title_family_alias_preserves_title():
-    """English title-family aliases preserve the title and replace the family name."""
     note = "Mr. Qorven attended."
 
     result = deidentify_note(
@@ -217,7 +241,6 @@ def test_stable_patient_name_title_family_alias_preserves_title():
 
 
 def test_stable_patient_name_french_title_family_alias_preserves_title():
-    """French title-family aliases preserve the title and replace the family name."""
     note = "Mme Qorven attended."
 
     result = deidentify_note(
@@ -236,7 +259,6 @@ def test_stable_patient_name_french_title_family_alias_preserves_title():
 
 
 def test_stable_patient_name_french_title_family_alias_profile_is_supported():
-    """The alias profile supports French title-family replacement directly."""
     profile = _build_patient_alias_profile(["Mme Qorven"])
     span = PHISpan(
         start=0,
@@ -255,12 +277,7 @@ def test_stable_patient_name_french_title_family_alias_profile_is_supported():
 
     assert replacement == ("Mme Fraser", "title_family")
 
-
-# Conservative fallback and validation behavior.
-
-
 def test_stable_patient_name_ambiguous_single_token_alias_raises():
-    """Ambiguous single-token aliases fail closed instead of guessing name role."""
     note = "Jordan attended."
 
     with pytest.raises(ValueError, match="ambiguous single-token"):
@@ -272,9 +289,7 @@ def test_stable_patient_name_ambiguous_single_token_alias_raises():
             patient_name_secret="synthetic-secret",
         )
 
-
 def test_stable_patient_name_unknown_name_uses_pydeid_replacement():
-    """Unknown detected names stay pyDeid-only and are not forced into patient identity."""
     note = "Patient Zylanda Qorven met Xavion Norel."
 
     result = deidentify_note(
@@ -298,9 +313,7 @@ def test_stable_patient_name_unknown_name_uses_pydeid_replacement():
         assert span.metadata["alias_match_type"] == ""
         assert span.replacement == span.metadata["pydeid_replacement"]
 
-
 def test_stable_patient_name_requires_patient_id_secret_aliases_and_name_detection():
-    """Stable patient-name mode requires ID, secret, aliases, and pyDeid name detection."""
     note = "Patient Zylanda Qorven attended."
 
     with pytest.raises(ValueError, match="patient_id"):
@@ -335,9 +348,7 @@ def test_stable_patient_name_requires_patient_id_secret_aliases_and_name_detecti
             types=["dates"],
         )
 
-
 def test_stable_patient_name_secret_env_var_success(monkeypatch):
-    """Patient-name secret can be supplied through an environment variable."""
     note = "Patient Zylanda Qorven attended."
     monkeypatch.setenv("PROJECT_PHI_TEST_NAME_SECRET", "synthetic-secret")
 
@@ -353,9 +364,7 @@ def test_stable_patient_name_secret_env_var_success(monkeypatch):
     assert "Zylanda" not in result.deidentified_text
     assert "Qorven" not in result.deidentified_text
 
-
 def test_stable_patient_name_secret_env_var_missing_or_empty_raises(monkeypatch):
-    """Missing or empty patient-name secret environment variables fail closed."""
     note = "Patient Zylanda Qorven attended."
     monkeypatch.delenv("PROJECT_PHI_MISSING_NAME_SECRET", raising=False)
 
@@ -378,12 +387,7 @@ def test_stable_patient_name_secret_env_var_missing_or_empty_raises(monkeypatch)
             patient_name_secret_env_var="PROJECT_PHI_EMPTY_NAME_SECRET",
         )
 
-
-# Shared reconstruction with date shifting.
-
-
 def test_stable_date_shift_and_patient_names_share_project_reconstruction():
-    """Date shifting and patient-name replacement share reconstruction safely."""
     note = "Patient Zylanda Qorven had follow-up on 2001-12-10."
 
     result = deidentify_note(

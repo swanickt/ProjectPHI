@@ -522,7 +522,12 @@ def _project_replacement_for_span(
         )
         if name_replacement is not None:
             replacement_text, match_type = name_replacement
-            return replacement_text, "project_stable_patient_name", match_type, {}
+            replacement_source = (
+                "project_residual_patient_alias"
+                if span.source == "ProjectPHI.residual_alias"
+                else "project_stable_patient_name"
+            )
+            return replacement_text, replacement_source, match_type, {}
 
     ordinary_token_match = _ordinary_token_veto_metadata(span, original_text)
     if ordinary_token_match is not None:
