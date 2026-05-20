@@ -186,6 +186,74 @@ def test_provider_trailing_action_rescue_requires_following_context():
     assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
+def test_provider_split_full_alias_components_use_same_stable_identity():
+    note = "Dr. Lena Shore reviewed mammography."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-shore": ["Lena Shore", "Shore"]}
+    )
+    spans = [
+        _name_span(note, "Lena", replacement="Kimberly"),
+        _name_span(note, "Shore", replacement="Ford"),
+    ]
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    identity = identities["Provider/synth-shore"]
+    assert text == f"Dr. {identity['full']} reviewed mammography."
+    assert final_spans[0].metadata["replacement_source"] == "project_stable_provider_name"
+    assert final_spans[0].metadata["alias_match_type"] == "given"
+    assert final_spans[1].metadata["replacement_source"] == "project_stable_provider_name"
+    assert final_spans[1].metadata["alias_match_type"] == "family"
+
+
+def test_provider_split_full_alias_is_consistent_across_notes():
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-mason": ["Theo Mason", "Mason"]}
+    )
+    outputs = []
+    for note in ["Copy to Dr. Theo Mason.", "Follow-up with Dr. Theo Mason."]:
+        spans = [
+            _name_span(note, "Theo", replacement="Maria"),
+            _name_span(note, "Mason", replacement="Jason"),
+        ]
+        text, _final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            spans,
+            provider_name_alias_profile=profile,
+            provider_name_identities=identities,
+        )
+        outputs.append(text)
+
+    identity = identities["Provider/synth-mason"]
+    assert outputs == [
+        f"Copy to Dr. {identity['full']}.",
+        f"Follow-up with Dr. {identity['full']}.",
+    ]
+
+
+def test_provider_family_component_from_full_alias_does_not_match_standalone_without_role():
+    note = "Mason reviewed mammography."
+    profile, identities = _provider_profile_and_identities(
+        {"Provider/synth-mason": ["Theo Mason", "Mason"]}
+    )
+    span = _name_span(note, "Mason", replacement="Jason")
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert text == "Jason reviewed mammography."
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+
+
 def test_provider_adjacent_action_span_preserves_lowercase_action_word():
     note = "Nurse Taylor reviewed wound care."
     profile, identities = _provider_profile_and_identities(

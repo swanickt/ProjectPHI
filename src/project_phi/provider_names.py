@@ -297,18 +297,26 @@ def _project_provider_name_replacement(
         )
     if alias_info is None:
         return None
-    if alias_info["match_type"] == "single_token" and not _has_provider_role_context(
-        original_text,
-        span.start,
-        span.end,
-    ):
-        return None
+    if alias_info["match_type"] == "single_token":
+        if _has_provider_role_context(original_text, span.start, span.end):
+            pass
+        else:
+            alias_info = _component_alias_info_inside_full_alias(
+                normalized,
+                span,
+                original_text,
+                provider_alias_profile,
+            )
+            if alias_info is None or alias_info["match_type"] == "single_token":
+                return None
 
     identity = provider_name_identities[alias_info["provider_id"]]
     if alias_info["match_type"] == "full":
         return identity["full"], "full"
     if alias_info["match_type"] == "given":
         return identity["given"], "given"
+    if alias_info["match_type"] == "family":
+        return identity["family"], "family"
     return identity["family"], "single_token"
 
 
@@ -468,7 +476,7 @@ def _component_alias_info_inside_full_alias(
                 if start <= span.start and span.end <= end:
                     return {
                         "provider_id": provider_id,
-                        "match_type": "given" if normalized == parts[0] else "single_token",
+                        "match_type": "given" if normalized == parts[0] else "family",
                     }
                 start = lowered.find(full_alias, start + 1)
     return None
