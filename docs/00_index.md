@@ -31,8 +31,6 @@ growth.
 - [Semantic Preservation](07_semantic_preservation.md): date intervals, aliases,
   protected clinical terms, false-positive tradeoffs, external terminology
   source policy.
-- [Developer Notes](08_developer_notes.md): testing strategy, safe future changes,
-  release/checkpoint checklist.
 - [Examples](09_examples.md): synthetic input/output/behavior examples for the
   note, CSV, stable replacement, custom regex, and protected-term workflows.
 - [Current Limitations](10_current_limitations.md): known behavior gaps,
