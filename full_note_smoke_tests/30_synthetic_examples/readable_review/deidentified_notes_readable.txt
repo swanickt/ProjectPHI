@@ -1,0 +1,169 @@
+De-identified Output Notes
+==========================
+
+PATIENT_ID: SYN-P001
+--------------------
+NOTE_ID: SYN-001
+ENCOUNTER_ID: ENC-001
+TEXT:
+Breast oncology follow-up. Date of service: June 17, 2026, 10:15. Patient Nancy Smith was seen by Dr. Jeffrey Perry. Diagnosis was documented in April 2021 after mammography with tomosynthesis showed architectural distortion. Continue letrozole and repeat bilateral mammography with tomosynthesis in May 2027. Call 343-101-9584 or tcook@vincent.biz if symptoms worsen.
+
+NOTE_ID: SYN-002
+ENCOUNTER_ID: ENC-002
+TEXT:
+Interval phone note for Nancy Smith on July 8, 2026. She reports no new breast mass and remains on endocrine therapy. Prior imaging in May 2026 showed no evidence of disease. Plan: review DEXA in November 2026 and continue vitamin D. Synthetic tracking code <SYNTHETIC_EVAL_CODE>.
+
+NOTE_ID: SYN-003
+ENCOUNTER_ID: ENC-003
+TEXT:
+Same-patient treatment timeline. Nurse Cohen reviewed wound care for Nancy Smith after lumpectomy on April 5, 2026. Dr. Examined the patient and documented stable disease. Follow-up mammography with tomosynthesis planned for June 2027.
+
+
+PATIENT_ID: SYN-P002
+--------------------
+NOTE_ID: SYN-004
+ENCOUNTER_ID: ENC-004
+TEXT:
+Copied correspondence note. Patient Maria Morales met with Dr. Joseph Fitzgerald on March 1, 2001. Her sister Dean Morales reported nausea after cycle 2 chemotherapy. Dr. Reviewed mammography with tomosynthesis and preserved BI-RADS 2 language. Plan: call 403-963-1151 or helenharper@ramirez.com.
+
+NOTE_ID: SYN-005
+ENCOUNTER_ID: ENC-005
+TEXT:
+Maria Morales reported fatigue during FOLFOX cycle 5 on March 15, 2001. Oncologist Fitzgerald discussed endocrine therapy and documented no evidence of disease. Social worker Ingram discussed transportation barriers with the family.
+
+NOTE_ID: SYN-006
+ENCOUNTER_ID: ENC-006
+TEXT:
+Maria Morales had CT chest on April 10, 2001 and bone scan on April 17, 2001. Imaging showed no osseous metastasis. Copy to Dr. Maria Marshall. Study token <SYNTHETIC_STUDY_CODE>.
+
+
+PATIENT_ID: SYN-P003
+--------------------
+NOTE_ID: SYN-007
+ENCOUNTER_ID: ENC-007
+TEXT:
+Metastasis concern follow-up. Kara Mccarty had right hip discomfort in December 2024. MRI pelvis on February 14, 2025 and bone scan on February 21, 2025 showed no osseous metastasis. Clinical assessment: remission with no evidence of disease. Return in spring 2025 if pain recurs.
+
+NOTE_ID: SYN-008
+ENCOUNTER_ID: ENC-008
+TEXT:
+Kara Mccarty returned on March 12, 2025. Radiologist Hernandez reviewed mammography and MRI pelvis. Dr. Assessed skin toxicity as grade 1 after radiation. Continue physiotherapy and repeat imaging in April 2025.
+
+NOTE_ID: SYN-009
+ENCOUNTER_ID: ENC-009
+TEXT:
+Administrative call for Kara Mccarty. Phone 365-832-9408. Email debra95@carter.com. MRN <SYNTHETIC_EVAL_CODE>. She lives near HUMBERLEA. Nurse Reviewed symptoms with patient and advised urgent care if dyspnea worsens.
+
+
+PATIENT_ID: SYN-P004
+--------------------
+NOTE_ID: SYN-010
+ENCOUNTER_ID: ENC-010
+TEXT:
+Administrative oncology note. Patient Jessica Donaldson arrived at 09:40 for infusion chair 7B-14 at <SYNTHETIC_FACILITY>. MRN <SYNTHETIC_EVAL_CODE>. Health card <SYNTHETIC_HEALTH_CARD>. Address 12 BROADVIEW NORTH, LONG BRANCH, ON N6X1I7. Continue FOLFOX cycle 5 on March 6, 2026.
+
+NOTE_ID: SYN-011
+ENCOUNTER_ID: ENC-011
+TEXT:
+Jessica Donaldson was discharged on February 19, 2026 after admission on February 16, 2026. Surgeon Martinez examined the incision and recommended wound care. Pathologist Documented invasive ductal carcinoma with ductal carcinoma in situ.
+
+NOTE_ID: SYN-012
+ENCOUNTER_ID: ENC-012
+TEXT:
+Jessica Donaldson follow-up. Pharmacist Reviewed letrozole dosing and calcium supplementation. Return in October 2026 for DEXA scan. Protocol <SYNTHETIC_PROTOCOL_CODE> was referenced in the synthetic scheduling system.
+
+
+PATIENT_ID: SYN-P005
+--------------------
+NOTE_ID: SYN-013
+ENCOUNTER_ID: ENC-013
+TEXT:
+Radiation oncology follow-up. Mason Moreno completed adjuvant radiation in August 2021 and started tamoxifen in September 2021. On February 7, 2026, skin exam showed mild hyperpigmentation without ulceration. Dr. Examined the chest wall and documented stable disease.
+
+NOTE_ID: SYN-014
+ENCOUNTER_ID: ENC-014
+TEXT:
+Mason Moreno called on February 21, 2026 with mild breast pain. Nurse Fitzgerald assessed symptoms and advised acetaminophen. Mammography with tomosynthesis remains planned for March 2027.
+
+NOTE_ID: SYN-015
+ENCOUNTER_ID: ENC-015
+TEXT:
+Mason Moreno surveillance note. Prior CT chest on December 15, 2024 showed no evidence of metastatic disease. Prior bone scan on December 22, 2024 showed no scintigraphic evidence of osseous metastases.
+
+
+PATIENT_ID: SYN-P006
+--------------------
+NOTE_ID: SYN-016
+ENCOUNTER_ID: ENC-016
+TEXT:
+Genetic risk note. Joseph Gomez has a family history of breast cancer and underwent counselling on August 31, 2024. Genetic counsellor Reviewed testing options with the patient. Email jackiemartin@tran.com for scheduling only.
+
+NOTE_ID: SYN-017
+ENCOUNTER_ID: ENC-017
+TEXT:
+Joseph Gomez procedure follow-up. Breast surgeon Lewis examined the incision on September 16, 2024. No infection was noted. Patient advised to call 587-306-2525 for fever or drainage.
+
+NOTE_ID: SYN-018
+ENCOUNTER_ID: ENC-018
+TEXT:
+Joseph Gomez endocrine therapy check. She started anastrozole in November 2024 and reports arthralgia. Physiotherapist Assessed gait and range of motion. Continue vitamin D.
+
+
+PATIENT_ID: SYN-P007
+--------------------
+NOTE_ID: SYN-019
+ENCOUNTER_ID: ENC-019
+TEXT:
+Consult-style breast cancer note. Chief complaint: Margaret Williamson presents for treatment planning after left breast biopsy. Pathology: invasive ductal carcinoma with associated ductal carcinoma in situ. Stage: cT2N1M0. Recommendations: breast-conserving surgery, sentinel lymph node biopsy, and adjuvant endocrine therapy. Date reviewed: March 14, 2026.
+
+NOTE_ID: SYN-020
+ENCOUNTER_ID: ENC-020
+TEXT:
+Margaret Williamson chemotherapy note. Dose-dense AC-T completed in September 2021. Letrozole started in October 2021. Dr. Discussed the plan with family and documented no evidence of disease.
+
+
+PATIENT_ID: SYN-P008
+--------------------
+NOTE_ID: SYN-021
+ENCOUNTER_ID: ENC-021
+TEXT:
+SOAP follow-up note. Brenda Murphy has metastatic breast cancer with prior osseous metastasis now clinically stable. She started anastrozole in April 2021 and radiation was completed in May 2021. Assessment: partial remission. Plan: repeat imaging on June 29, 2026 and call 866-215-5657 for fever.
+
+NOTE_ID: SYN-022
+ENCOUNTER_ID: ENC-022
+TEXT:
+Brenda Murphy imaging note. Mammography with tomosynthesis in June 2026 showed benign post-treatment changes. Radiologist Griffin reviewed mammography. BI-RADS 2: benign findings.
+
+
+PATIENT_ID: SYN-P009
+--------------------
+NOTE_ID: SYN-023
+ENCOUNTER_ID: ENC-023
+TEXT:
+Pathology/procedure note. John Wilson underwent excision of a right breast mass on August 9, 2025. Gross description showed a firm mobile lesion. Final impression: fibroadenoma with no invasive carcinoma. Copy to Dr. Maria Marshall and <SYNTHETIC_DEPARTMENT>.
+
+NOTE_ID: SYN-024
+ENCOUNTER_ID: ENC-024
+TEXT:
+John Wilson surgical follow-up. Surgeon Lewis discussed pathology with the patient. Wound was healing well. Follow-up on August 23, 2025. Synthetic study token <SYNTHETIC_STUDY_CODE>.
+
+
+PATIENT_ID: SYN-P010
+--------------------
+NOTE_ID: SYN-025
+ENCOUNTER_ID: ENC-025
+TEXT:
+Radiation follow-up note. Carol Sparks returns after chest wall radiotherapy. She denies dyspnea, jaundice, new neurologic symptoms, and persistent focal bone pain. Mammography with tomosynthesis in June 2026 showed benign post-treatment changes. Dr. Assessed skin toxicity as grade 1.
+
+NOTE_ID: SYN-026
+ENCOUNTER_ID: ENC-026
+TEXT:
+Carol Sparks symptom call. Nurse Cohen reviewed wound care and discussed the patient with the oncology nurse navigator. Plan: repeat CBC in 7 days and return to clinic in December 2026.
+
+
+PATIENT_ID: SYN-P011
+--------------------
+NOTE_ID: SYN-027
+ENCOUNTER_ID: ENC-027
+TEXT:
+Hereditary-risk discharge note. Aimee Bartlett has a family history of breast cancer and underwent risk-reducing surgery on July 19, 2024. Condition on discharge: stable. Follow up in four weeks. Email lisabrown@combs.com for scheduling only.

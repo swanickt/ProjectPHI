@@ -1,0 +1,37 @@
+{
+  "synthetic_facility_lakeside_oncology_clinic": {
+    "phi_type": "Synthetic Facility",
+    "pattern": "\\bLakeside Oncology Clinic\\b",
+    "replacement": "<SYNTHETIC_FACILITY>"
+  },
+  "synthetic_department_breast_imaging": {
+    "phi_type": "Synthetic Department",
+    "pattern": "\\bBreast Imaging Department\\b",
+    "replacement": "<SYNTHETIC_DEPARTMENT>"
+  },
+  "synthetic_location_example_grove": {
+    "phi_type": "Synthetic Location",
+    "pattern": "\\bExample Grove\\b",
+    "replacement": "<SYNTHETIC_LOCATION>"
+  },
+  "synthetic_eval_code": {
+    "phi_type": "Synthetic Eval Code",
+    "pattern": "\\bSYN-EVAL-\\d{4}\\b",
+    "replacement": "<SYNTHETIC_EVAL_CODE>"
+  },
+  "synthetic_study_code": {
+    "phi_type": "Synthetic Study Code",
+    "pattern": "\\bSIM-STUDY-\\d{3}\\b",
+    "replacement": "<SYNTHETIC_STUDY_CODE>"
+  },
+  "synthetic_protocol_code": {
+    "phi_type": "Synthetic Protocol Code",
+    "pattern": "\\bPROTO-SYN-\\d{2}\\b",
+    "replacement": "<SYNTHETIC_PROTOCOL_CODE>"
+  },
+  "synthetic_test_health_card": {
+    "phi_type": "Synthetic Health Card",
+    "pattern": "\\bTEST-OHIP-\\d{4}-\\d{3}-\\d{3}-ZZ\\b",
+    "replacement": "<SYNTHETIC_HEALTH_CARD>"
+  }
+}

@@ -1,0 +1,19 @@
+(.venv) tswanick@wm6621d362:~/PycharmProjects/ProjectPHI$ time PROJECT_PHI_DATE_SHIFT_SECRET=local-eval-date-secret \
+PROJECT_PHI_PATIENT_NAME_SECRET=local-eval-name-secret \
+PROJECT_PHI_PROVIDER_NAME_SECRET=local-eval-provider-secret \
+uv run python full_note_smoke_tests/30_synthetic_examples/run_smoke_test.py
+/home/tswanick/PycharmProjects/ProjectPHI/.venv/lib/python3.11/site-packages/pyDeid/process_note/PHIFinder.py:6: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+rows_read=30
+rows_written=27
+rows_failed=3
+spans_written=151
+warnings=3
+warning=Row failed: row=29, patient_id='SYN-MISSING1', encounter_id='ENC-028', note_id='SYN-028', error=ValueError
+warning=Row failed: row=30, patient_id='SYN-MISSING2', encounter_id='ENC-029', note_id='SYN-029', error=ValueError
+warning=Row failed: row=31, patient_id='SYN-MISSING3', encounter_id='ENC-030', note_id='SYN-030', error=ValueError
+
+real    0m2.710s
+user    0m2.937s
+sys     0m1.355s
+(.venv) tswanick@wm6621d362:~/PycharmProjects/ProjectPHI$

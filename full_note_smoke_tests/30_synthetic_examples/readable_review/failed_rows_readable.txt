@@ -1,0 +1,31 @@
+Failed Rows
+===========
+
+PATIENT_ID: SYN-MISSING1
+------------------------
+NOTE_ID: SYN-028
+ENCOUNTER_ID: ENC-028
+INPUT_TEXT:
+Expected failure row one. Orion Vale was seen on April 1, 2026 for breast oncology follow-up. This row intentionally lacks an alias manifest entry so stable patient-name surrogate processing should omit it safely.
+WARNINGS:
+Row failed: row=29, patient_id='SYN-MISSING1', encounter_id='ENC-028', note_id='SYN-028', error=ValueError
+
+
+PATIENT_ID: SYN-MISSING2
+------------------------
+NOTE_ID: SYN-029
+ENCOUNTER_ID: ENC-029
+INPUT_TEXT:
+Expected failure row two. Mira Solen was seen on May 1, 2026. Nurse Reviewed symptoms with patient. This row intentionally lacks aliases.
+WARNINGS:
+Row failed: row=30, patient_id='SYN-MISSING2', encounter_id='ENC-029', note_id='SYN-029', error=ValueError
+
+
+PATIENT_ID: SYN-MISSING3
+------------------------
+NOTE_ID: SYN-030
+ENCOUNTER_ID: ENC-030
+INPUT_TEXT:
+Expected failure row three. Lena Shore was seen on June 1, 2026. Radiologist Reviewed mammography. This row intentionally lacks aliases.
+WARNINGS:
+Row failed: row=31, patient_id='SYN-MISSING3', encounter_id='ENC-030', note_id='SYN-030', error=ValueError

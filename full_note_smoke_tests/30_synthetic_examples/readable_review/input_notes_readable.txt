@@ -1,0 +1,193 @@
+Input Notes
+===========
+
+PATIENT_ID: SYN-MISSING1
+------------------------
+NOTE_ID: SYN-028
+ENCOUNTER_ID: ENC-028
+TEXT:
+Expected failure row one. Orion Vale was seen on April 1, 2026 for breast oncology follow-up. This row intentionally lacks an alias manifest entry so stable patient-name surrogate processing should omit it safely.
+
+
+PATIENT_ID: SYN-MISSING2
+------------------------
+NOTE_ID: SYN-029
+ENCOUNTER_ID: ENC-029
+TEXT:
+Expected failure row two. Mira Solen was seen on May 1, 2026. Nurse Reviewed symptoms with patient. This row intentionally lacks aliases.
+
+
+PATIENT_ID: SYN-MISSING3
+------------------------
+NOTE_ID: SYN-030
+ENCOUNTER_ID: ENC-030
+TEXT:
+Expected failure row three. Lena Shore was seen on June 1, 2026. Radiologist Reviewed mammography. This row intentionally lacks aliases.
+
+
+PATIENT_ID: SYN-P001
+--------------------
+NOTE_ID: SYN-001
+ENCOUNTER_ID: ENC-001
+TEXT:
+Breast oncology follow-up. Date of service: May 12, 2026, 10:15. Patient Amelia Rowan was seen by Dr. Lena Shore. Diagnosis was documented in March 2021 after mammography with tomosynthesis showed architectural distortion. Continue letrozole and repeat bilateral mammography with tomosynthesis in April 2027. Call 416-555-0141 or amelia.rowan@example.com if symptoms worsen.
+
+NOTE_ID: SYN-002
+ENCOUNTER_ID: ENC-002
+TEXT:
+Interval phone note for Amelia Rowan on June 2, 2026. She reports no new breast mass and remains on endocrine therapy. Prior imaging in April 2026 showed no evidence of disease. Plan: review DEXA in October 2026 and continue vitamin D. Synthetic tracking code SYN-EVAL-1001.
+
+NOTE_ID: SYN-003
+ENCOUNTER_ID: ENC-003
+TEXT:
+Same-patient treatment timeline. Nurse Taylor reviewed wound care for Amelia Rowan after lumpectomy on February 28, 2026. Dr. Examined the patient and documented stable disease. Follow-up mammography with tomosynthesis planned for May 2027.
+
+
+PATIENT_ID: SYN-P002
+--------------------
+NOTE_ID: SYN-004
+ENCOUNTER_ID: ENC-004
+TEXT:
+Copied correspondence note. Patient Bianca Vale met with Dr. Nira Patel on April 10, 2001. Her sister Mara Vale reported nausea after cycle 2 chemotherapy. Dr. Reviewed mammography with tomosynthesis and preserved BI-RADS 2 language. Plan: call 647-555-0166 or bianca.vale@example.com.
+
+NOTE_ID: SYN-005
+ENCOUNTER_ID: ENC-005
+TEXT:
+Bianca Vale reported fatigue during FOLFOX cycle 5 on April 24, 2001. Oncologist Patel discussed endocrine therapy and documented no evidence of disease. Social worker Green discussed transportation barriers with the family.
+
+NOTE_ID: SYN-006
+ENCOUNTER_ID: ENC-006
+TEXT:
+Bianca Vale had CT chest on May 20, 2001 and bone scan on May 27, 2001. Imaging showed no osseous metastasis. Copy to Dr. Theo Mason. Study token SIM-STUDY-777.
+
+
+PATIENT_ID: SYN-P003
+--------------------
+NOTE_ID: SYN-007
+ENCOUNTER_ID: ENC-007
+TEXT:
+Metastasis concern follow-up. Carina Holt had right hip discomfort in November 2024. MRI pelvis on January 8, 2025 and bone scan on January 15, 2025 showed no osseous metastasis. Clinical assessment: remission with no evidence of disease. Return in spring 2025 if pain recurs.
+
+NOTE_ID: SYN-008
+ENCOUNTER_ID: ENC-008
+TEXT:
+Carina Holt returned on February 3, 2025. Radiologist Chen reviewed mammography and MRI pelvis. Dr. Assessed skin toxicity as grade 1 after radiation. Continue physiotherapy and repeat imaging in March 2025.
+
+NOTE_ID: SYN-009
+ENCOUNTER_ID: ENC-009
+TEXT:
+Administrative call for Carina Holt. Phone 416-555-0188. Email carina.holt@example.com. MRN SYN-EVAL-2002. She lives near Example Grove. Nurse Reviewed symptoms with patient and advised urgent care if dyspnea worsens.
+
+
+PATIENT_ID: SYN-P004
+--------------------
+NOTE_ID: SYN-010
+ENCOUNTER_ID: ENC-010
+TEXT:
+Administrative oncology note. Patient Dalia Mercer arrived at 09:40 for infusion chair 7B-14 at Lakeside Oncology Clinic. MRN SYN-EVAL-3003. Health card TEST-OHIP-2222-333-444-ZZ. Address 12 Example Grove, Toronto, ON M4N 2K3. Continue FOLFOX cycle 5 on March 18, 2026.
+
+NOTE_ID: SYN-011
+ENCOUNTER_ID: ENC-011
+TEXT:
+Dalia Mercer was discharged on March 3, 2026 after admission on February 28, 2026. Surgeon Morgan examined the incision and recommended wound care. Pathologist Documented invasive ductal carcinoma with ductal carcinoma in situ.
+
+NOTE_ID: SYN-012
+ENCOUNTER_ID: ENC-012
+TEXT:
+Dalia Mercer follow-up. Pharmacist Reviewed letrozole dosing and calcium supplementation. Return in October 2026 for DEXA scan. Protocol PROTO-SYN-12 was referenced in the synthetic scheduling system.
+
+
+PATIENT_ID: SYN-P005
+--------------------
+NOTE_ID: SYN-013
+ENCOUNTER_ID: ENC-013
+TEXT:
+Radiation oncology follow-up. Elise Norwood completed adjuvant radiation in September 2021 and started tamoxifen in October 2021. On March 3, 2026, skin exam showed mild hyperpigmentation without ulceration. Dr. Examined the chest wall and documented stable disease.
+
+NOTE_ID: SYN-014
+ENCOUNTER_ID: ENC-014
+TEXT:
+Elise Norwood called on March 17, 2026 with mild breast pain. Nurse Patel assessed symptoms and advised acetaminophen. Mammography with tomosynthesis remains planned for April 2027.
+
+NOTE_ID: SYN-015
+ENCOUNTER_ID: ENC-015
+TEXT:
+Elise Norwood surveillance note. Prior CT chest on January 8, 2025 showed no evidence of metastatic disease. Prior bone scan on January 15, 2025 showed no scintigraphic evidence of osseous metastases.
+
+
+PATIENT_ID: SYN-P006
+--------------------
+NOTE_ID: SYN-016
+ENCOUNTER_ID: ENC-016
+TEXT:
+Genetic risk note. Farah Linden has a family history of breast cancer and underwent counselling on August 4, 2024. Genetic counsellor Reviewed testing options with the patient. Email farah.linden@example.com for scheduling only.
+
+NOTE_ID: SYN-017
+ENCOUNTER_ID: ENC-017
+TEXT:
+Farah Linden procedure follow-up. Breast surgeon Cook examined the incision on August 20, 2024. No infection was noted. Patient advised to call 289-555-0199 for fever or drainage.
+
+NOTE_ID: SYN-018
+ENCOUNTER_ID: ENC-018
+TEXT:
+Farah Linden endocrine therapy check. She started anastrozole in October 2024 and reports arthralgia. Physiotherapist Assessed gait and range of motion. Continue vitamin D.
+
+
+PATIENT_ID: SYN-P007
+--------------------
+NOTE_ID: SYN-019
+ENCOUNTER_ID: ENC-019
+TEXT:
+Consult-style breast cancer note. Chief complaint: Greta Sloan presents for treatment planning after left breast biopsy. Pathology: invasive ductal carcinoma with associated ductal carcinoma in situ. Stage: cT2N1M0. Recommendations: breast-conserving surgery, sentinel lymph node biopsy, and adjuvant endocrine therapy. Date reviewed: February 28, 2026.
+
+NOTE_ID: SYN-020
+ENCOUNTER_ID: ENC-020
+TEXT:
+Greta Sloan chemotherapy note. Dose-dense AC-T completed in September 2021. Letrozole started in October 2021. Dr. Discussed the plan with family and documented no evidence of disease.
+
+
+PATIENT_ID: SYN-P008
+--------------------
+NOTE_ID: SYN-021
+ENCOUNTER_ID: ENC-021
+TEXT:
+SOAP follow-up note. Helena Pierce has metastatic breast cancer with prior osseous metastasis now clinically stable. She started anastrozole in March 2021 and radiation was completed in April 2021. Assessment: partial remission. Plan: repeat imaging on May 20, 2026 and call 416-555-0198 for fever.
+
+NOTE_ID: SYN-022
+ENCOUNTER_ID: ENC-022
+TEXT:
+Helena Pierce imaging note. Mammography with tomosynthesis in May 2026 showed benign post-treatment changes. Radiologist Brown reviewed mammography. BI-RADS 2: benign findings.
+
+
+PATIENT_ID: SYN-P009
+--------------------
+NOTE_ID: SYN-023
+ENCOUNTER_ID: ENC-023
+TEXT:
+Pathology/procedure note. Iris Calder underwent excision of a right breast mass on July 7, 2025. Gross description showed a firm mobile lesion. Final impression: fibroadenoma with no invasive carcinoma. Copy to Dr. Theo Mason and Breast Imaging Department.
+
+NOTE_ID: SYN-024
+ENCOUNTER_ID: ENC-024
+TEXT:
+Iris Calder surgical follow-up. Surgeon Cook discussed pathology with the patient. Wound was healing well. Follow-up on July 21, 2025. Synthetic study token SIM-STUDY-888.
+
+
+PATIENT_ID: SYN-P010
+--------------------
+NOTE_ID: SYN-025
+ENCOUNTER_ID: ENC-025
+TEXT:
+Radiation follow-up note. Jana Rivers returns after chest wall radiotherapy. She denies dyspnea, jaundice, new neurologic symptoms, and persistent focal bone pain. Mammography with tomosynthesis in May 2026 showed benign post-treatment changes. Dr. Assessed skin toxicity as grade 1.
+
+NOTE_ID: SYN-026
+ENCOUNTER_ID: ENC-026
+TEXT:
+Jana Rivers symptom call. Nurse Taylor reviewed wound care and discussed the patient with the oncology nurse navigator. Plan: repeat CBC in 7 days and return to clinic in November 2026.
+
+
+PATIENT_ID: SYN-P011
+--------------------
+NOTE_ID: SYN-027
+ENCOUNTER_ID: ENC-027
+TEXT:
+Hereditary-risk discharge note. Kira Meadow has a family history of breast cancer and underwent risk-reducing surgery on August 4, 2024. Condition on discharge: stable. Follow up in four weeks. Email kira.meadow@example.com for scheduling only.
