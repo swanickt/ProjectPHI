@@ -190,17 +190,3 @@ PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest -q tests
 
 The tests use synthetic examples only and avoid asserting exact pyDeid
 randomized surrogate values.
-
-## Known Limitations
-
-- Stable date shifting only applies to pyDeid-detected date spans that the
-  project can safely parse.
-- Stable patient-name surrogates require explicit aliases and do not infer
-  aliases, clinician names, family names, or other people from note text.
-- Stable provider-name surrogates require explicit provider aliases. They do
-  not detect unconfigured provider names, and single-token aliases require
-  provider-role context.
-- Custom regex support is a pyDeid pass-through mechanism; no real
-  Sunnybrook/Ontario regex families are included at the moment.
-- Protected clinical terms are semantic-preservation vetoes, not compliance
-  guarantees.
