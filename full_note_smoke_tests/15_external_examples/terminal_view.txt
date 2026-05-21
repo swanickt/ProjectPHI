@@ -1,0 +1,19 @@
+(.venv) tswanick@wm6621d362:~/PycharmProjects/ProjectPHI$ time PROJECT_PHI_DATE_SHIFT_SECRET=external-local-date-secret \
+uv run project-phi-deid \
+  full_note_smoke_tests/15_external_examples/input_notes.csv \
+  full_note_smoke_tests/15_external_examples/deidentified_output.csv \
+  --audit-output-file full_note_smoke_tests/15_external_examples/audit_output.csv \
+  --stable-date-shift \
+  --date-shift-secret-env-var PROJECT_PHI_DATE_SHIFT_SECRET
+/home/tswanick/PycharmProjects/ProjectPHI/.venv/lib/python3.11/site-packages/pyDeid/process_note/PHIFinder.py:6: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+rows_read=15
+rows_written=15
+rows_failed=0
+spans_written=4
+warnings=0
+
+real    0m1.612s
+user    0m1.956s
+sys     0m1.298s
+(.venv) tswanick@wm6621d362:~/PycharmProjects/ProjectPHI$

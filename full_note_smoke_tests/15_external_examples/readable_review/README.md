@@ -7,3 +7,4 @@ The note text and audit field values are copied exactly from the CSV rows; only 
 - `deidentified_notes_readable.txt`: current de-identified output note text grouped by patient ID.
 - `failed_rows_readable.txt`: input text and sanitized warning rows for omitted rows.
 - `audit_rows_readable.txt`: current audit rows as pretty-printed dictionaries grouped by patient ID.
+- `verification_report.txt`: regeneration and exact-copy checks for this readable view.

@@ -16,7 +16,10 @@ MTSamples pages were used as format/category references for AI-written synthetic
 ## How The Notes Were Created
 
 The notes in `input_notes.csv` are synthetic AI-generated (gpt-5.5) smoke-test notes. They are not copied patient notes, not copied
-clinical examples, and not real PHI.
+clinical examples, and not real PHI. Some note wording is intentionally artificial because gpt-5.5 was asked to include ProjectPHI edge cases, such as title-context false positives, protected
+  clinical terms, stable alias behavior, synthetic identifiers, and failure-path rows. These notes are therefore smoke-test stress cases, not examples of natural
+  clinical documentation style.
+
 
 The note set was created by:
 
