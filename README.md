@@ -37,8 +37,8 @@ Key pages:
   handling, and initial surrogate generation.
 - Normalized `PHISpan` records with original-note offsets, pyDeid surrogate
   metadata, and project-final replacement metadata kept separate.
-- Stable per-patient date shifting for pyDeid-detected parseable full dates and
-  month/year spans.
+- Stable per-patient date shifting for pyDeid-detected parseable full dates,
+  month/year spans, and month/day spans.
 - Stable patient-name surrogates for explicit patient aliases, including a
   bounded exact residual pass for supplied aliases that pyDeid prunes before
   ProjectPHI sees them.
@@ -46,6 +46,8 @@ Key pages:
   including role-guarded residual matching for single-token aliases.
 - Protected clinical-term and narrow title/context false-positive vetoes for
   observed semantic-preservation failures.
+- Dotted decimal-like contact false-positive vetoes for code/measurement
+  fragments that pyDeid emits as phone-like spans.
 - Runtime config loaders for patient alias manifests, provider alias manifests,
   custom regex JSON, and protected clinical terms CSV.
 - Internal audit CSV output for span-level review.
