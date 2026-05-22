@@ -139,6 +139,38 @@ def test_deidentify_csv_stable_date_shift_replaces_full_date(tmp_path):
     assert summary["rows_failed"] == 0
     assert "2001-12-10" not in output_rows[0]["note_text"]
 
+def test_deidentify_csv_stable_date_shift_partial_month_day_by_default(tmp_path):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    audit_file = tmp_path / "audit.csv"
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-csv-partial-date-001",
+                "note_id": "Note/synth-csv-partial-date-001",
+                "note_text": "Follow-up on July 15.",
+            }
+        ],
+    )
+
+    summary = deidentify_csv(
+        input_file,
+        output_file,
+        audit_output_file=audit_file,
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+    )
+
+    output_rows = _read_csv(output_file)
+    audit_rows = _read_csv(audit_file)
+    assert summary["rows_failed"] == 0
+    assert "July 15" not in output_rows[0]["note_text"]
+    assert "<DATE>" not in output_rows[0]["note_text"]
+    assert audit_rows[0]["project_date_shift_policy"] == "shifted_partial_month_day"
+    assert audit_rows[0]["project_date_shift_granularity"] == "month_day"
+    assert audit_rows[0]["project_date_shift_anchor_year"] == "2000"
+
 def test_deidentify_csv_stable_date_shift_secret_env_var(tmp_path, monkeypatch):
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"

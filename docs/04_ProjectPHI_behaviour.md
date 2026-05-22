@@ -96,11 +96,15 @@ The project shifts only pyDeid-detected/pruned date spans it can safely parse.
 Current support includes ISO-style full dates, common English month-name full
 dates such as `March 14, 2026`, day-month-year forms such as
 `8 August 2019`, and month/year spans such as `March 2021`, but only inside
-pyDeid-detected date spans. The project does not scan the full note for dates.
+pyDeid-detected date spans. Month/day shifting is available for partial dates
+such as `July 15`. The project does not scan the full note for dates.
 
 Month/year spans keep month/year granularity. The project uses the same
 patient-specific day offset as full dates with an internal day-15 anchor, then
 outputs only `Month YYYY`.
+
+Partial month/day spans keep month/day granularity by default. The project uses
+an internal leap-year anchor for arithmetic and outputs only `Month Day`.
 
 Times, year-only spans, holidays, and seasons are preserved by default.
 Unsupported date-like spans may be replaced with `<DATE>` with sanitized
@@ -111,6 +115,14 @@ like dates to pyDeid, for example `1/50`, `11/50`, `1/61`, or `6/60`. When
 pyDeid emits one of these as a date-like span and nearby clinical context
 supports a score/fraction reading, ProjectPHI preserves the original text
 instead of shifting it to a month/year expression.
+
+## Decimal-Like Contact Vetoes
+
+pyDeid can emit dotted numeric code fragments such as `189.1000043` as
+`Telephone/Fax`. ProjectPHI preserves these when the dotted digit grouping is
+not phone-like, or when a colon/dotted continuation shows the span is part of a
+larger code. Dotted phone numbers such as `416.555.1212` continue to be
+replaced.
 
 ## Clinical Abbreviation Vetoes
 

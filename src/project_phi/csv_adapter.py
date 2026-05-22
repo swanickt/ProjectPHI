@@ -38,6 +38,7 @@ def deidentify_csv(
     date_shift_secret: str | bytes | None = None,  # Direct date-shift secret.
     date_shift_secret_env_var: str | None = None,  # Env var containing date secret.
     date_shift_days: int = 45,  # Inclusive +/- date shift range.
+    shift_partial_month_day_dates: bool = True,  # Month Day date shifting.
     stable_patient_name_surrogates: bool = False,  # Enable explicit-alias patient names.
     patient_aliases_by_patient_id: dict[str, Iterable[str]] | None = None,  # Row alias lookup.
     patient_name_secret: str | bytes | None = None,  # Direct patient-name secret.
@@ -142,6 +143,7 @@ def deidentify_csv(
                             date_shift_secret=date_shift_secret,
                             date_shift_secret_env_var=date_shift_secret_env_var,
                             date_shift_days=date_shift_days,
+                            shift_partial_month_day_dates=shift_partial_month_day_dates,
                             stable_patient_name_surrogates=stable_patient_name_surrogates,
                             patient_aliases=patient_aliases,
                             patient_name_secret=patient_name_secret,

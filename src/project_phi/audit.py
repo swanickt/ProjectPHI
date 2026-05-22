@@ -47,6 +47,9 @@ from .models import PHISpan
 # - project_date_shift_days: Number of days applied by ProjectPHI date shifting, if any.
 # - project_date_shift_range_days: Configured date-shift range used by the policy.
 # - project_date_shift_policy: Date-shift policy name or identifier.
+# - project_date_shift_granularity: Visible date granularity preserved by shifting.
+# - project_date_shift_anchor_day: Internal anchor day for month/year shifting.
+# - project_date_shift_anchor_year: Internal anchor year for month/day shifting.
 # - project_name_policy: Patient-name handling policy applied to this span, if any.
 # - name_role: Name role/provenance, such as patient, doctor, or alias, when known.
 # - alias_match_type: How a configured alias matched the detected span, when applicable.
@@ -71,6 +74,8 @@ from .models import PHISpan
 # - project_clinical_abbreviation_context: Context family that allowed preservation.
 # - project_obstetric_history_policy: Obstetric shorthand preservation policy.
 # - project_obstetric_history_pattern: Obstetric shorthand pattern family.
+# - project_decimal_code_policy: Dotted numeric contact false-positive policy.
+# - project_decimal_code_context: Local/grouping context that allowed preservation.
 #
 # Audit rows intentionally omit PHISpan.text and original note text.
 AUDIT_COLUMNS = [
@@ -95,6 +100,9 @@ AUDIT_COLUMNS = [
     "project_date_shift_days",
     "project_date_shift_range_days",
     "project_date_shift_policy",
+    "project_date_shift_granularity",
+    "project_date_shift_anchor_day",
+    "project_date_shift_anchor_year",
     "project_name_policy",
     "name_role",
     "alias_match_type",
@@ -119,6 +127,8 @@ AUDIT_COLUMNS = [
     "project_clinical_abbreviation_context",
     "project_obstetric_history_policy",
     "project_obstetric_history_pattern",
+    "project_decimal_code_policy",
+    "project_decimal_code_context",
 ]
 
 
@@ -166,6 +176,9 @@ def _span_to_audit_row(
         "project_date_shift_days": span.metadata.get("project_date_shift_days"),
         "project_date_shift_range_days": span.metadata.get("project_date_shift_range_days"),
         "project_date_shift_policy": span.metadata.get("project_date_shift_policy"),
+        "project_date_shift_granularity": span.metadata.get("project_date_shift_granularity"),
+        "project_date_shift_anchor_day": span.metadata.get("project_date_shift_anchor_day"),
+        "project_date_shift_anchor_year": span.metadata.get("project_date_shift_anchor_year"),
         "project_name_policy": span.metadata.get("project_name_policy"),
         "name_role": span.metadata.get("name_role"),
         "alias_match_type": span.metadata.get("alias_match_type"),
@@ -194,6 +207,8 @@ def _span_to_audit_row(
         ),
         "project_obstetric_history_policy": span.metadata.get("project_obstetric_history_policy"),
         "project_obstetric_history_pattern": span.metadata.get("project_obstetric_history_pattern"),
+        "project_decimal_code_policy": span.metadata.get("project_decimal_code_policy"),
+        "project_decimal_code_context": span.metadata.get("project_decimal_code_context"),
     }
 
 
@@ -240,6 +255,9 @@ def _write_warning_audit_row(
             "project_date_shift_days": "",
             "project_date_shift_range_days": "",
             "project_date_shift_policy": "",
+            "project_date_shift_granularity": "",
+            "project_date_shift_anchor_day": "",
+            "project_date_shift_anchor_year": "",
             "project_name_policy": "",
             "name_role": "",
             "alias_match_type": "",
@@ -264,6 +282,8 @@ def _write_warning_audit_row(
             "project_clinical_abbreviation_context": "",
             "project_obstetric_history_policy": "",
             "project_obstetric_history_pattern": "",
+            "project_decimal_code_policy": "",
+            "project_decimal_code_context": "",
         }
     )
 

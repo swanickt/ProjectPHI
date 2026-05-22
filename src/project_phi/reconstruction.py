@@ -57,10 +57,12 @@ from typing import Any
 
 from .date_shift import (
     _date_shift_metadata_for_month_year_span,
+    _date_shift_metadata_for_partial_month_day_span,
     _date_shift_policy_for_full_date_span,
     _is_date_like_span,
     _is_holiday_or_season_span,
     _is_parseable_month_year_span,
+    _is_parseable_partial_month_day_span,
     _is_parseable_full_date_span,
     _is_score_or_fraction_date_span,
     _is_time_span,
@@ -68,6 +70,7 @@ from .date_shift import (
     _score_or_fraction_date_metadata,
     _shift_full_date_span,
     _shift_month_year_span,
+    _shift_partial_month_day_span,
 )
 from .models import PHISpan
 from .patient_names import _name_policy_metadata, _project_patient_name_replacement
@@ -256,6 +259,7 @@ def _reconstruct_with_project_replacements(
     provider_name_alias_profile: dict[str, Any] | None = None,
     provider_name_identities: dict[str, dict[str, str]] | None = None,
     protected_terms_profile: dict[str, Any] | None = None,
+    shift_partial_month_day_dates: bool = True,
 ) -> tuple[str, list[PHISpan], list[str]]:
     """Rebuild final note text from original text and normalized spans.
 
@@ -327,6 +331,7 @@ def _reconstruct_with_project_replacements(
             provider_name_alias_profile=provider_name_alias_profile,
             provider_name_identities=provider_name_identities,
             protected_terms_profile=protected_terms_profile,
+            shift_partial_month_day_dates=shift_partial_month_day_dates,
         )
         replacement_text, replacement_source, policy, policy_metadata = replacement_info
         if policy == "unparseable_date_placeholder":
@@ -384,6 +389,7 @@ def _project_replacement_for_span(
     provider_name_alias_profile: dict[str, Any] | None = None,
     provider_name_identities: dict[str, dict[str, str]] | None = None,
     protected_terms_profile: dict[str, Any] | None = None,
+    shift_partial_month_day_dates: bool = True,
 ) -> tuple[str, str, str, dict[str, Any]]:
     """Choose final replacement text and policy metadata for one span.
 
@@ -523,6 +529,20 @@ def _project_replacement_for_span(
                 _date_shift_metadata_for_month_year_span(),
             )
 
+    if (
+        date_shift_offset is not None
+        and shift_partial_month_day_dates
+        and _is_parseable_partial_month_day_span(span)
+    ):
+        shifted_text = _shift_partial_month_day_span(span, date_shift_offset)
+        if shifted_text is not None:
+            return (
+                shifted_text,
+                "project_stable_date_shift",
+                "shifted_partial_month_day",
+                _date_shift_metadata_for_partial_month_day_span(),
+            )
+
     if date_shift_offset is not None and _is_time_span(span):
         return span.text, "preserved", "preserved_time", {}
     if date_shift_offset is not None and _is_year_only_span(span):
@@ -584,6 +604,15 @@ def _project_replacement_for_span(
                 provider_action_match["project_provider_action_policy"],
                 provider_action_match,
             )
+
+    decimal_code_match = _decimal_code_contact_veto_metadata(span, original_text)
+    if decimal_code_match is not None:
+        return (
+            span.text,
+            "project_decimal_code_veto",
+            decimal_code_match["project_decimal_code_policy"],
+            decimal_code_match,
+        )
 
     ordinary_token_match = _ordinary_token_veto_metadata(span, original_text)
     if ordinary_token_match is not None:
@@ -664,6 +693,60 @@ def _ordinary_token_veto_metadata(
         }
 
     return None
+
+
+def _decimal_code_contact_veto_metadata(
+    span: PHISpan,
+    original_text: str,
+) -> dict[str, str] | None:
+    """Return metadata for dotted numeric code fragments misread as phones."""
+    if span.label != "CONTACT":
+        return None
+    if "telephone/fax" not in " ".join(span.pydeid_types or []).casefold():
+        return None
+
+    span_digits = _dotted_numeric_groups(span.text)
+    if span_digits is None:
+        return None
+
+    if _has_dotted_numeric_colon_continuation(span, original_text):
+        return {
+            "project_decimal_code_policy": "preserved_decimal_like_code_fragment",
+            "project_decimal_code_context": "colon_dotted_numeric_continuation",
+        }
+
+    if not _looks_like_dotted_phone_groups(span_digits):
+        return {
+            "project_decimal_code_policy": "preserved_decimal_like_code_fragment",
+            "project_decimal_code_context": "non_phone_dotted_grouping",
+        }
+
+    return None
+
+
+def _dotted_numeric_groups(text: str) -> tuple[int, ...] | None:
+    """Return digit group lengths for a whole dotted numeric token."""
+    stripped = text.strip(" \t\r\n()[]{}")
+    if "." not in stripped:
+        return None
+    parts = stripped.split(".")
+    if len(parts) < 2 or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(len(part) for part in parts)
+
+
+def _looks_like_dotted_phone_groups(groups: tuple[int, ...]) -> bool:
+    """Return true for dotted phone-number digit grouping ProjectPHI should keep replacing."""
+    return groups == (3, 3, 4) or groups == (1, 3, 3, 4)
+
+
+def _has_dotted_numeric_colon_continuation(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true when a dotted span is followed by colon+dotted numeric text."""
+    after = original_text[span.end : min(len(original_text), span.end + 32)]
+    return re.match(r"^\s*:\s*\d+(?:\.\d+)+", after) is not None
 
 
 def _clinical_abbreviation_veto_metadata(

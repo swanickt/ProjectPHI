@@ -154,6 +154,7 @@ Parameters:
 - `patient_id`: required
 - `date_shift_secret` or `date_shift_secret_env_var`: required
 - `date_shift_days`: default `45`, meaning inclusive `[-45, +45]`
+- `shift_partial_month_day_dates`: default `True`
 
 Recommended environment variable:
 
@@ -185,9 +186,18 @@ offset used for full dates, and outputs only `Month YYYY`. For example,
 `March 2021` may become `April 2021` if the stable offset crosses the month
 boundary. It may remain `March 2021` if the stable offset stays within March.
 
-Ambiguous or partial date-like text such as `March 14`, seasons, year-only
-mentions, and times continues to follow the preservation or `<DATE>` fallback
-policy.
+Partial month/day spans such as `March 14` or `July 15` are shifted by default.
+ProjectPHI applies the same patient-specific offset using an internal
+leap-year anchor and outputs only `Month Day`. The anchor year is an internal
+calculation aid and is not copied into de-identified note text. Set
+`shift_partial_month_day_dates=False` to use the conservative `<DATE>`
+fallback.
+
+The CLI uses the same default. Pass `--no-shift-partial-month-day-dates` to use
+the conservative fallback for month/day spans.
+
+Seasons, year-only mentions, and times continue to follow the preservation or
+`<DATE>` fallback policy.
 
 ProjectPHI also preserves slash-form score/fraction notation when pyDeid has
 emitted it as a date-like span and nearby clinical context supports a non-date

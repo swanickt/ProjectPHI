@@ -53,6 +53,7 @@ def deidentify_note(
     date_shift_secret: str | bytes | None = None,  # Direct date-shift secret bytes/text.
     date_shift_secret_env_var: str | None = None,  # Env var containing date-shift secret.
     date_shift_days: int = 45,  # Inclusive +/- date shift range.
+    shift_partial_month_day_dates: bool = True,  # Stable shifting for Month Day spans.
     stable_patient_name_surrogates: bool = False,  # Enable explicit-alias patient names.
     patient_aliases: Iterable[str] | None = None,  # Explicit aliases for this patient.
     patient_name_secret: str | bytes | None = None,  # Direct patient-name secret.
@@ -162,6 +163,9 @@ def deidentify_note(
         "named_entity_recognition": False,
         "stable_date_shift": stable_date_shift,
         "date_shift_days": date_shift_days if stable_date_shift else None,
+        "shift_partial_month_day_dates": (
+            shift_partial_month_day_dates if stable_date_shift else False
+        ),
         "stable_patient_name_surrogates": stable_patient_name_surrogates,
         "stable_provider_name_surrogates": stable_provider_name_surrogates,
         "custom_regex_rule_ids": [
@@ -234,6 +238,7 @@ def deidentify_note(
             provider_name_alias_profile=provider_name_alias_profile,
             provider_name_identities=provider_name_identities,
             protected_terms_profile=protected_terms_profile,
+            shift_partial_month_day_dates=shift_partial_month_day_dates,
         )
         warnings.extend(reconstruction_warnings)
 

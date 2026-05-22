@@ -65,13 +65,14 @@ runtime behavior.
   and project-final replacement offsets;
 - a single-note wrapper, CSV adapter, config loaders, and CLI;
 - internal audit CSV output;
-- stable per-patient date shifting for supported pyDeid-detected full dates and
-  month/year spans;
+- stable per-patient date shifting for supported pyDeid-detected full dates,
+  month/year spans, and month/day spans;
 - stable patient-name surrogates for explicit aliases only, including bounded
   exact residual matching for supplied aliases missed or pruned by pyDeid;
 - stable provider-name surrogates for explicit governed aliases only,
   including role-guarded residual matching for single-token provider aliases;
 - protected clinical term false-positive vetoes;
+- dotted decimal-like contact false-positive vetoes;
 - narrow clinical abbreviation and ordinary-token false-positive vetoes;
 - title-context action-word false-positive vetoes;
 - custom regex configuration that is passed through to pyDeid.
@@ -103,12 +104,13 @@ Reconstruction priority:
    pyDeid emitted as a date-like span;
 5. stable patient-name surrogate policy;
 6. stable provider-name surrogate policy;
-7. ordinary-token vetoes for selected pyDeid name false positives, such as
+7. dotted decimal-like contact false-positive vetoes;
+8. ordinary-token vetoes for selected pyDeid name false positives, such as
    articles/pronouns and guarded `NH` nursing-home shorthand;
-8. title-token-fragment vetoes for cases where pyDeid splits a
+9. title-token-fragment vetoes for cases where pyDeid splits a
    non-identifying `Dr.` token into name spans;
-9. title-context action-word veto;
-10. pyDeid replacement fallback.
+10. title-context action-word veto;
+11. pyDeid replacement fallback.
 
 Reconstruction fails closed on unexpected overlapping spans rather than
 silently preserving raw text.

@@ -21,6 +21,10 @@ month/year spans such as `March 2021` while preserving month/year granularity.
 Month/year shifting uses the same patient-specific day offset as full dates
 with an internal day-15 anchor, then outputs only `Month YYYY`.
 
+Month/day spans without a year, such as `July 15`, are shifted by default. The
+implementation uses an internal leap-year anchor for month rollover and outputs
+only `Month Day`.
+
 The project does not add a separate date detector. Year-only mentions, times,
 seasons, and holidays are preserved by default.
 
@@ -35,6 +39,14 @@ also contains Apgar wording and 1/5/10-minute timing cues, so ordinary slash
 dates remain eligible for stable date shifting. Tumor-marker fragments such as
 `CA 15-3` are preserved only when bounded local context indicates tumor-marker
 use.
+
+## Decimal-Code Semantics
+
+pyDeid can mistake dotted numeric code fragments for phone numbers. ProjectPHI
+preserves pyDeid-emitted contact spans such as `189.1000043` when their dotted
+digit grouping is not phone-like, or when a colon/dotted continuation shows a
+larger code shape. Phone-like dotted contact text such as `416.555.1212`
+continues to be replaced.
 
 ## Clinical Abbreviation Semantics
 

@@ -108,6 +108,74 @@ def test_cli_stable_date_shift_uses_env_var_secret(tmp_path, monkeypatch, capsys
     assert "2001-12-10" not in captured.out
 
 
+def test_cli_stable_date_shift_partial_month_day_default(tmp_path, monkeypatch, capsys):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    monkeypatch.setenv("PROJECT_PHI_TEST_CLI_DATE_SECRET", "synthetic-date-secret")
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-cli-partial-date-001",
+                "note_id": "Note/synth-cli-partial-date-001",
+                "note_text": "Follow-up on July 15.",
+            }
+        ],
+    )
+
+    exit_code = main(
+        [
+            str(input_file),
+            str(output_file),
+            "--stable-date-shift",
+            "--date-shift-secret-env-var",
+            "PROJECT_PHI_TEST_CLI_DATE_SECRET",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    output_rows = _read_csv(output_file)
+    assert exit_code == 0
+    assert "July 15" not in output_rows[0]["note_text"]
+    assert "<DATE>" not in output_rows[0]["note_text"]
+    assert "synthetic-date-secret" not in captured.out
+    assert "July 15" not in captured.out
+
+
+def test_cli_stable_date_shift_partial_month_day_disable_flag(tmp_path, monkeypatch, capsys):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    monkeypatch.setenv("PROJECT_PHI_TEST_CLI_DATE_SECRET", "synthetic-date-secret")
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-cli-partial-date-002",
+                "note_id": "Note/synth-cli-partial-date-002",
+                "note_text": "Follow-up on July 15.",
+            }
+        ],
+    )
+
+    exit_code = main(
+        [
+            str(input_file),
+            str(output_file),
+            "--stable-date-shift",
+            "--date-shift-secret-env-var",
+            "PROJECT_PHI_TEST_CLI_DATE_SECRET",
+            "--no-shift-partial-month-day-dates",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    output_rows = _read_csv(output_file)
+    assert exit_code == 0
+    assert output_rows[0]["note_text"] == "Follow-up on <DATE>."
+    assert "synthetic-date-secret" not in captured.out
+    assert "July 15" not in captured.out
+
+
 def test_cli_stable_patient_name_surrogates_load_alias_manifest(tmp_path, monkeypatch, capsys):
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"

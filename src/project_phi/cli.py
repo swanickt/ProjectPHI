@@ -79,6 +79,7 @@ def main(
             stable_date_shift=args.stable_date_shift,
             date_shift_secret_env_var=args.date_shift_secret_env_var,
             date_shift_days=args.date_shift_days,
+            shift_partial_month_day_dates=args.shift_partial_month_day_dates,
             stable_patient_name_surrogates=args.stable_patient_name_surrogates,
             patient_aliases_by_patient_id=patient_aliases_by_patient_id,
             patient_name_secret_env_var=args.patient_name_secret_env_var,
@@ -120,6 +121,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stable-date-shift", action="store_true")
     parser.add_argument("--date-shift-secret-env-var")
     parser.add_argument("--date-shift-days", type=int, default=45)
+    parser.add_argument(
+        "--shift-partial-month-day-dates",
+        action="store_true",
+        default=True,
+    )
+    parser.add_argument(
+        "--no-shift-partial-month-day-dates",
+        action="store_false",
+        dest="shift_partial_month_day_dates",
+    )
     parser.add_argument("--stable-patient-name-surrogates", action="store_true")
     parser.add_argument("--patient-alias-manifest")
     parser.add_argument("--patient-name-secret-env-var")

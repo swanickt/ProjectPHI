@@ -304,6 +304,117 @@ def test_stable_date_shift_month_year_uses_same_patient_offset_as_full_date():
         days=month_year_span.metadata["project_date_shift_days"]
     )
 
+def test_stable_date_shift_shifts_partial_month_day_by_default():
+    note = "Follow-up on July 15."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-partial-month-day-001",
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+    )
+
+    span = _date_spans(result)[0]
+    assert "<DATE>" not in result.deidentified_text
+    assert span.metadata["project_date_shift_policy"] == "shifted_partial_month_day"
+
+def test_stable_date_shift_partial_month_day_can_be_disabled():
+    note = "Follow-up on July 15."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-partial-month-day-001",
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+        shift_partial_month_day_dates=False,
+    )
+
+    assert result.deidentified_text == "Follow-up on <DATE>."
+    assert _date_spans(result)[0].metadata["project_date_shift_policy"] == (
+        "unparseable_date_placeholder"
+    )
+
+def test_stable_date_shift_shifts_partial_month_day_when_explicitly_enabled():
+    note = "Follow-up on July 15."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-partial-month-day-001",
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+        shift_partial_month_day_dates=True,
+    )
+
+    span = _date_spans(result)[0]
+    expected = date(2000, 7, 15) + timedelta(days=span.metadata["project_date_shift_days"])
+    assert result.deidentified_text == f"Follow-up on {expected.strftime('%B')} {expected.day}."
+    assert span.replacement == f"{expected.strftime('%B')} {expected.day}"
+    assert span.metadata["replacement_source"] == "project_stable_date_shift"
+    assert span.metadata["project_date_shift_policy"] == "shifted_partial_month_day"
+    assert span.metadata["project_date_shift_granularity"] == "month_day"
+    assert span.metadata["project_date_shift_anchor_year"] == 2000
+    assert "project_date_shift_anchor_day" not in span.metadata
+
+def test_stable_date_shift_partial_month_day_handles_abbreviations_and_ordinals():
+    note = "Follow-up on Jul 15 and review on July 15th."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-partial-month-day-001",
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+        shift_partial_month_day_dates=True,
+    )
+
+    spans = _date_spans(result)
+    assert len(spans) >= 2
+    assert all(span.metadata["project_date_shift_policy"] == "shifted_partial_month_day" for span in spans[:2])
+    assert "<DATE>" not in result.deidentified_text
+    assert "Jul 15" not in result.deidentified_text
+    assert "July 15th" not in result.deidentified_text
+
+def test_stable_date_shift_partial_month_day_boundary_uses_leap_anchor_year():
+    note = "Approximate dates January 2 and February 29."
+    spans = [
+        PHISpan(
+            start=18,
+            end=27,
+            text="January 2",
+            label="DATE",
+            source="pyDeid",
+            replacement="May 1",
+            pydeid_types=["Month Day [Month dd]"],
+            metadata={"parsed_phi": {"kind": "date", "day": "2", "month": "January", "year": None}},
+        ),
+        PHISpan(
+            start=32,
+            end=43,
+            text="February 29",
+            label="DATE",
+            source="pyDeid",
+            replacement="May 2",
+            pydeid_types=["Month Day [Month dd]"],
+            metadata={"parsed_phi": {"kind": "date", "day": "29", "month": "February", "year": None}},
+        ),
+    ]
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+        date_shift_offset=-5,
+        date_shift_days=45,
+        shift_partial_month_day_dates=True,
+    )
+
+    assert warnings == []
+    assert deidentified_text == "Approximate dates December 28 and February 24."
+    assert final_spans[0].replacement == "December 28"
+    assert final_spans[1].replacement == "February 24"
+    assert all(
+        span.metadata["project_date_shift_anchor_year"] == 2000
+        for span in final_spans
+    )
+
 def test_stable_date_shift_preserves_score_fraction_in_date_span():
     note = "The patient scored 1/50 points on the synthetic assessment tool."
     span = PHISpan(
@@ -960,7 +1071,7 @@ def test_stable_date_shift_unparseable_date_placeholder_warning_is_sanitized():
     assert "Spring" not in warning_text
     assert note not in warning_text
 
-def test_stable_date_shift_unsupported_partial_natural_date_fallback_is_sanitized():
+def test_stable_date_shift_disabled_partial_natural_date_fallback_is_sanitized():
     note = "Approximate partial date March 14."
     spans = [
         PHISpan(
@@ -975,11 +1086,12 @@ def test_stable_date_shift_unsupported_partial_natural_date_fallback_is_sanitize
         )
     ]
 
-    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
         note,
         spans,
         date_shift_offset=1,
         date_shift_days=45,
+        shift_partial_month_day_dates=False,
     )
 
     warning_text = " ".join(warnings)

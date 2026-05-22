@@ -135,7 +135,7 @@ def test_single_note_oncology_follow_up_removes_phi_and_preserves_clinical_conte
         [
             "Zylanda",
             "Qorven",
-            "Mira",
+            "Dr. Mira",
             "Solen",
             "Amari",
             "April 10, 2001",

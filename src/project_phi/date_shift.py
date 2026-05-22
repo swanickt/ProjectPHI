@@ -69,6 +69,10 @@ _NATURAL_LANGUAGE_MONTH_YEAR_RE = re.compile(
     r"^\s*([A-Za-z]{3,9})\.?\s+([0-9]{4})\s*$",
     re.IGNORECASE,
 )
+_NATURAL_LANGUAGE_MONTH_DAY_RE = re.compile(
+    r"^\s*([A-Za-z]{3,9})\.?\s+([0-9]{1,2})(?:st|nd|rd|th)?\s*$",
+    re.IGNORECASE,
+)
 _SLASH_SCORE_OR_FRACTION_RE = re.compile(r"^\s*\d{1,2}/\d{1,3}\s*$")
 _SLASH_APGAR_SCORE_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{1,2}\s*$")
 _TUMOR_MARKER_NUMBER_RE = re.compile(r"^\s*\d{1,2}(?:[-.]\d{1,2})\s*$")
@@ -78,6 +82,7 @@ _APGAR_TIMING_RE = re.compile(
     re.IGNORECASE,
 )
 _MONTH_YEAR_ANCHOR_DAY = 15
+_MONTH_DAY_ANCHOR_YEAR = 2000
 
 _SCORE_OR_FRACTION_CONTEXT_TERMS = {
     "activity score",
@@ -315,6 +320,25 @@ def _is_parseable_month_year_span(
     ) or _parse_natural_language_month_year(span.text) is not None
 
 
+def _is_parseable_partial_month_day_span(
+    span: PHISpan,  # Normalized pyDeid span to classify.
+) -> bool:
+    """Return true when a pyDeid span has month/day but no year.
+
+    This supports optional partial month-day shifting. The visible output keeps
+    month/day granularity; the implementation uses an internal leap anchor year
+    only for calendar arithmetic.
+    """
+    parsed = span.metadata.get("parsed_phi") or {}
+    return (
+        parsed.get("kind") == "date"
+        and parsed.get("day") not in (None, "")
+        and parsed.get("month") not in (None, "")
+        and not str(parsed.get("month")).strip().isdigit()
+        and parsed.get("year") in (None, "")
+    ) or _parse_natural_language_month_day(span.text) is not None
+
+
 def _shift_full_date_span(
     span: PHISpan,  # Date span to shift.
     date_shift_offset: int,  # Patient-specific day offset.
@@ -362,6 +386,30 @@ def _shift_month_year_span(
 
     shifted_date = original_date + timedelta(days=date_shift_offset)
     return f"{_MONTH_NAMES[shifted_date.month]} {shifted_date.year}"
+
+
+def _shift_partial_month_day_span(
+    span: PHISpan,  # Partial month/day span to shift.
+    date_shift_offset: int,  # Patient-specific day offset.
+) -> str | None:
+    """Return shifted month/day text while preserving month/day granularity."""
+
+    original_date = _month_day_date_from_parsed_phi(span)
+    if original_date is None:
+        original_date = _parse_natural_language_month_day(span.text)
+    if original_date is None:
+        return None
+
+    shifted_date = original_date + timedelta(days=date_shift_offset)
+    return f"{_MONTH_NAMES[shifted_date.month]} {shifted_date.day}"
+
+
+def _date_shift_metadata_for_partial_month_day_span() -> dict[str, int | str]:
+    """Return audit metadata describing the partial month/day anchor policy."""
+    return {
+        "project_date_shift_granularity": "month_day",
+        "project_date_shift_anchor_year": _MONTH_DAY_ANCHOR_YEAR,
+    }
 
 
 def _date_shift_metadata_for_month_year_span() -> dict[str, int | str]:
@@ -460,6 +508,21 @@ def _month_year_date_from_parsed_phi(
         return None
 
 
+def _month_day_date_from_parsed_phi(
+    span: PHISpan,  # Span with optional pyDeid partial date metadata.
+) -> date | None:
+    """Convert parsed month/day metadata to an internal anchored date."""
+    parsed = span.metadata.get("parsed_phi") or {}
+    try:
+        return date(
+            _MONTH_DAY_ANCHOR_YEAR,
+            _month_number(parsed["month"]),
+            int(parsed["day"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def _parse_natural_language_full_date(
     text: str,  # Span-local text already detected by pyDeid.
 ) -> date | None:
@@ -480,6 +543,22 @@ def _parse_natural_language_full_date(
     day_text, month_text, year_text = match.groups()
     try:
         return date(int(year_text), _month_number(month_text), int(day_text))
+    except (KeyError, ValueError):
+        return None
+
+
+def _parse_natural_language_month_day(
+    text: str,  # Span-local text already detected by pyDeid.
+) -> date | None:
+    # Month/day shifting stays inside pyDeid-emitted date spans and uses a fixed
+    # internal leap anchor year so visible output keeps month/day granularity.
+    match = _NATURAL_LANGUAGE_MONTH_DAY_RE.match(text)
+    if not match:
+        return None
+
+    month_text, day_text = match.groups()
+    try:
+        return date(_MONTH_DAY_ANCHOR_YEAR, _month_number(month_text), int(day_text))
     except (KeyError, ValueError):
         return None
 
