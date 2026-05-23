@@ -142,9 +142,10 @@ protection can preserve the pyDeid-emitted component only when the bounded
 source-text context matches an approved clinical phrase. This keeps the rule
 span-local and avoids turning risky eponyms into blanket allow-list entries.
 The same approach is used for selected observed fragments such as `Paddick` in
-`Paddick index`, `SAFA` in `SAFA-A`, `von` in `von Willebrand factor`, `veno`
-in `veno-venous`, `hemi` in `hemi-abdomen`, and `dermo` in
-`dermo-hypodermal`.
+`Paddick index`, `Hamilton` in Hamilton scales, `Willebrand` in
+`von Willebrand factor`, `P.` in `P. insidiosum`, `GIA` in `Endo-GIA`, `M` in
+`Sof-lex/3 M ESPE`, `veno` in `veno-venous`, `hemi` in `hemi-abdomen`, and
+`dermo` in `dermo-hypodermal`.
 
 Residual risk is explicit: a rare person, facility, or organization could share
 a protected clinical term. That tradeoff is accepted only for internal
@@ -167,8 +168,9 @@ ProjectPHI separately preserves selected ordinary clinical prose when pyDeid
 emits it as a `NAME` span in strong local context, such as `Blood` in `Blood
 pressure`, `Vital` in `Vital signs`, `Computed tomography`, `follow-up`, and
 similar low-risk clinical wording. It also preserves selected vendor or
-reference metadata such as `Varian`, `Caris`, `Promega`, and `Dako` only when
-nearby product, assay, manufacturer, or device context supports that read.
+reference metadata such as `Varian`, `Caris`, `Promega`, `Dako`, `Webster`,
+and `Johnson` only when nearby product, assay, manufacturer, or device context
+supports that read.
 Geography is not preserved by this rule; city/country names remain pyDeid
 fallback unless another explicit project rule applies.
 
