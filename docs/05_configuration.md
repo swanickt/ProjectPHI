@@ -20,6 +20,7 @@ deidentify_note(
     date_shift_secret=None,
     date_shift_secret_env_var=None,
     date_shift_days=45,
+    shift_partial_month_day_dates=True,
     stable_patient_name_surrogates=False,
     patient_aliases=None,
     patient_name_secret=None,
@@ -60,6 +61,7 @@ deidentify_csv(
     date_shift_secret=None,
     date_shift_secret_env_var=None,
     date_shift_days=45,
+    shift_partial_month_day_dates=True,
     stable_patient_name_surrogates=False,
     patient_aliases_by_patient_id=None,
     patient_name_secret=None,
@@ -611,6 +613,7 @@ project-phi-deid synthetic_input.csv synthetic_output.csv \
   --audit-output-file synthetic_audit.csv \
   --stable-date-shift \
   --date-shift-secret-env-var PROJECT_PHI_DATE_SHIFT_SECRET \
+  --no-shift-partial-month-day-dates \
   --stable-patient-name-surrogates \
   --patient-alias-manifest synthetic_aliases.csv \
   --patient-name-secret-env-var PROJECT_PHI_PATIENT_NAME_SECRET \

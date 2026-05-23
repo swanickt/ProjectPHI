@@ -22,10 +22,13 @@ note text
   -> optional project reconstruction from original-note offsets
        - protected clinical term veto
        - clinical abbreviation veto
+       - obstetric-history shorthand veto
        - stable date shifting
        - stable patient-name aliases
        - stable provider-name aliases
+       - dotted decimal-like contact veto
        - ordinary-token veto
+       - title-token-fragment veto
        - title-context action-word veto
        - pyDeid replacement fallback
   -> DeidentificationResult

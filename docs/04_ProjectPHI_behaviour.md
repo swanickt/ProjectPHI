@@ -52,6 +52,8 @@ text. Reconstruction is used for:
 - stable provider-name surrogates;
 - protected clinical term preservation;
 - narrow clinical abbreviation preservation;
+- strict obstetric-history shorthand preservation;
+- dotted decimal-like contact preservation;
 - ordinary-token false-positive preservation;
 - title-token-fragment preservation;
 - title-context action-word preservation.
@@ -76,11 +78,12 @@ Priority order during reconstruction:
    pyDeid emitted as a date-like span;
 5. stable patient-name surrogate policy;
 6. stable provider-name surrogate policy;
-7. ordinary-token vetoes for selected pyDeid name false positives;
-8. title-token-fragment vetoes for pyDeid-split `Dr.` fragments in strong
+7. dotted decimal-like contact vetoes;
+8. ordinary-token vetoes for selected pyDeid name false positives;
+9. title-token-fragment vetoes for pyDeid-split `Dr.` fragments in strong
    title/name or clinical-role/title/name contexts;
-9. title-context action-word veto;
-10. pyDeid replacement fallback.
+10. title-context action-word veto;
+11. pyDeid replacement fallback.
 
 ## Stable Date Shifting
 

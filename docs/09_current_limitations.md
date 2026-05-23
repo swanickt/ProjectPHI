@@ -201,3 +201,9 @@ system or a broad free-text person detector.
   vetoes, and pyDeid fallback spans.
 
   This is an audit-cleanliness fix, not a de-identified text correctness fix.
+
+## Other:
+
+Date shift format changes:
+- Staff Radiologist on 1/13/2023 5:05 PM EST -> Staff Radiologist on 2022-12-24 5:05 PM EST
+- oct 31 -> October 11

@@ -462,6 +462,7 @@ project-phi-deid synthetic_input.csv synthetic_output.csv \
   --audit-output-file synthetic_audit.csv \
   --stable-date-shift \
   --date-shift-secret-env-var PROJECT_PHI_DATE_SHIFT_SECRET \
+  --no-shift-partial-month-day-dates \
   --stable-patient-name-surrogates \
   --patient-alias-manifest synthetic_aliases.csv \
   --patient-name-secret-env-var PROJECT_PHI_PATIENT_NAME_SECRET \

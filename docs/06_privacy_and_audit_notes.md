@@ -21,8 +21,10 @@ Audit rows may include:
 - preserved title-token fragments such as `Dr.` pieces and policy metadata;
 - preserved ordinary-token or clinical-abbreviation text and policy metadata;
 - preserved obstetric-history shorthand text and policy metadata;
+- preserved dotted decimal-like contact text and policy metadata;
 - stable residual explicit patient-alias replacement metadata;
 - stable explicit provider-alias replacement metadata;
+- date-shift granularity and internal anchor metadata;
 - patient, encounter, or note identifiers if configured in input columns.
 
 This information is useful for review, but it is more detailed than ordinary training output should need.
