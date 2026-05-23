@@ -289,7 +289,15 @@ _VENDOR_REFERENCE_CONTEXT_RULES = {
     "DAKO": ("vendor_reference_metadata", ("clone", "antibody", "immunohistochemical")),
     "VITEK": ("vendor_reference_metadata", ("maldi", "tof", "blood cultures", "spectrometry")),
     "ELLA": ("vendor_reference_metadata", ("prosthesis", "ella-cs", "esophageal")),
-    "ESPE": ("vendor_reference_metadata", ("3m", "dental", "restoration")),
+    "ESPE": ("vendor_reference_metadata", ("3m", "3 m", "dental", "restoration")),
+    "WEBSTER": (
+        "vendor_reference_metadata",
+        ("biosense", "carto", "thermocool"),
+    ),
+    "JOHNSON": (
+        "vendor_reference_metadata",
+        ("johnson & johnson", "& johnson", "biosense webster", "ethicon", "prolene"),
+    ),
 }
 
 

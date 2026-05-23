@@ -161,6 +161,10 @@ def test_reconstruction_preserves_vendor_reference_metadata_without_geography():
         ("Blood cultures were tested by Vitek MS.", "Vitek"),
         ("An esophageal ELLA prosthesis was placed.", "ELLA"),
         ("Dental restoration used 3M ESPE.", "ESPE"),
+        ("Dental restoration used 3 M ESPE.", "ESPE"),
+        ("A Biosense Webster ablation catheter was used.", "Webster"),
+        ("The Biosense Webster catheter is made by Johnson & Johnson Medical.", "Johnson"),
+        ("The Prolene suture was from Johnson & Johnson.", "Johnson"),
     ]
 
     for note, token in examples:
@@ -188,3 +192,20 @@ def test_reconstruction_does_not_preserve_vendor_geography_name():
     assert text == "The device was manufactured in Toronto, Italy."
     assert warnings == []
     assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_does_not_preserve_vendor_like_person_names_without_context():
+    examples = [
+        ("Webster attended the clinic visit.", "Webster"),
+        ("Johnson attended the clinic visit.", "Johnson"),
+    ]
+
+    for note, token in examples:
+        text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            [_span(note, token, label="NAME", replacement="Carter")],
+        )
+
+        assert text == "Carter attended the clinic visit."
+        assert warnings == []
+        assert spans[0].metadata["replacement_source"] == "pyDeid"
