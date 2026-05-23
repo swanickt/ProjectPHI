@@ -527,7 +527,7 @@ def test_stable_date_shift_preserves_tumor_marker_numeric_span():
         == "score_or_fraction_context"
     )
 
-def test_stable_date_shift_does_not_preserve_hyphen_partial_date_without_marker_context():
+def test_stable_date_shift_shifts_pydeid_numeric_month_day_span():
     note = "Vancomycin was started on 8-29 after cultures."
     start = note.index("8-29")
     span = PHISpan(
@@ -548,8 +548,85 @@ def test_stable_date_shift_does_not_preserve_hyphen_partial_date_without_marker_
         date_shift_days=45,
     )
 
-    assert deidentified_text != note
-    assert final_spans[0].replacement == "<DATE>"
+    assert deidentified_text == "Vancomycin was started on September 28 after cultures."
+    assert final_spans[0].replacement == "September 28"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_partial_month_day"
+    assert final_spans[0].metadata["project_date_shift_granularity"] == "month_day"
+    assert final_spans[0].metadata["project_date_shift_anchor_year"] == 2000
+    assert warnings == []
+
+def test_stable_date_shift_shifts_placeholder_wrapped_numeric_month_day_span():
+    note = "Repair was completed on [**6-17**] without complications."
+    start = note.index("[**6-17**]")
+    span = PHISpan(
+        start=start,
+        end=start + len("[**6-17**]"),
+        text="[**6-17**]",
+        label="DATE",
+        source="pyDeid",
+        replacement="<DATE>",
+        pydeid_types=["Month/Day (3) [mm/dd]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "6", "day": "17"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=9,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == "Repair was completed on June 26 without complications."
+    assert warnings == []
+    assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_partial_month_day"
+
+def test_stable_date_shift_does_not_parse_numeric_month_day_without_pydeid_month_day_type():
+    note = "The clinical code was 6-17."
+    start = note.index("6-17")
+    span = PHISpan(
+        start=start,
+        end=start + len("6-17"),
+        text="6-17",
+        label="DATE",
+        source="pyDeid",
+        replacement="<DATE>",
+        pydeid_types=["Other Date"],
+        metadata={},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=9,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == "The clinical code was <DATE>."
+    assert final_spans[0].metadata["project_date_shift_policy"] == "unparseable_date_placeholder"
+    assert warnings == ["Unparseable pyDeid date span replaced with <DATE>."]
+
+def test_stable_date_shift_does_not_parse_numeric_month_day_non_date_span():
+    note = "The clinical code was 6-17."
+    start = note.index("6-17")
+    span = PHISpan(
+        start=start,
+        end=start + len("6-17"),
+        text="6-17",
+        label="NAME",
+        source="pyDeid",
+        replacement="Carter",
+        pydeid_types=["Month/Day (3) [mm/dd]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "6", "day": "17"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=9,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == "The clinical code was <DATE>."
     assert final_spans[0].metadata["project_date_shift_policy"] == "unparseable_date_placeholder"
     assert warnings == ["Unparseable pyDeid date span replaced with <DATE>."]
 

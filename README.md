@@ -50,6 +50,8 @@ Key pages:
   fragments that pyDeid emits as phone-like spans.
 - Compact clinical-code and phrase vetoes for strongly contextual scores,
   stages, biomedical abbreviations, and duration/exposure phrases.
+- Ordinary clinical prose and vendor/reference metadata vetoes that avoid
+  preserving geography by default.
 - Runtime config loaders for patient alias manifests, provider alias manifests,
   custom regex JSON, and protected clinical terms CSV.
 - Internal audit CSV output for span-level review.

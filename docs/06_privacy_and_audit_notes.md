@@ -117,6 +117,8 @@ internal audit metadata, not training output.
 Compact clinical-code vetoes may preserve and audit values such as GCS
 components, TNM stages, and contextual biomedical abbreviations when pyDeid
 emitted them as spans and local context supports semantic preservation.
+Ordinary clinical prose and vendor/reference metadata vetoes may also preserve
+their span text in audit rows; geography is not preserved by the vendor rule.
 
 The built-in protected term set is manually curated, general, and
 non-site-specific. It is a targeted breast/oncology/radiology and selected

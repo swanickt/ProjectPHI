@@ -259,6 +259,39 @@ _CLINICAL_CODE_CONTEXT_RULES = {
     "KEGG": ("bioinformatics_resource", ("pathway", "enrichment", "ras", "mapk", "pi3k")),
 }
 
+_ORDINARY_CLINICAL_PROSE_TERMS = {
+    "blood": ("blood_pressure_or_lab_prose", ("pressure", "cultures", "culture", "count", "smear", "gas", "glucose", "cell", "chemistry")),
+    "vital": ("vital_signs_prose", ("sign", "signs", "normal", "stable")),
+    "computed": ("computed_tomography_prose", ("tomography", "ct", "revealed", "showed")),
+    "tomography": ("computed_tomography_prose", ("computed", "ct", "revealed", "showed")),
+    "cultures": ("culture_prose", ("blood", "urine", "wound", "grew", "negative", "positive")),
+    "culture": ("culture_prose", ("blood", "urine", "wound", "grew", "negative", "positive")),
+    "topical": ("treatment_prose", ("antibiotic", "antibiotics", "steroid", "steroids", "therapy")),
+    "follow-up": ("follow_up_prose", ("visit", "after", "appointment", "months", "weeks", "scheduled")),
+    "well-child": ("well_child_prose", ("examination", "visit", "clinic")),
+    "left-sided": ("laterality_prose", ("pain", "weakness", "lesion", "procedure", "surgery")),
+    "low-risk": ("risk_status_prose", ("disease", "mds", "tumor", "tumour", "patient")),
+    "pre-employment": ("exam_context_prose", ("examination", "exam")),
+    "clamped": ("procedure_prose", ("tube", "drain", "catheter")),
+    "clamping": ("procedure_prose", ("tube", "drain", "catheter")),
+    "general": ("clinical_role_prose", ("practitioner", "practitioners", "practice")),
+    "practitioners": ("clinical_role_prose", ("general", "home care", "doctors")),
+}
+
+_VENDOR_REFERENCE_CONTEXT_RULES = {
+    "VARIAN": ("vendor_reference_metadata", ("truebeam", "hyperarc", "linac", "medical systems")),
+    "SRL": ("vendor_reference_metadata", ("clonit", "assay", "variant catcher", "pcr")),
+    "CARIS": ("vendor_reference_metadata", ("life science", "laboratory", "sequencing")),
+    "PROMEGA": ("vendor_reference_metadata", ("powerplex", "kit", "multiplex")),
+    "OTSUKA": ("vendor_reference_metadata", ("pharmaceutical", "ophthalmic", "mucosta")),
+    "SENKO": ("vendor_reference_metadata", ("medical", "instrument", "mera")),
+    "BRUKER": ("vendor_reference_metadata", ("maldi", "tof", "database", "spectrum")),
+    "DAKO": ("vendor_reference_metadata", ("clone", "antibody", "immunohistochemical")),
+    "VITEK": ("vendor_reference_metadata", ("maldi", "tof", "blood cultures", "spectrometry")),
+    "ELLA": ("vendor_reference_metadata", ("prosthesis", "ella-cs", "esophageal")),
+    "ESPE": ("vendor_reference_metadata", ("3m", "dental", "restoration")),
+}
+
 
 def _reconstruct_with_stable_dates(
     original_text: str,
@@ -665,6 +698,18 @@ def _project_replacement_for_span(
             clinical_code_match,
         )
 
+    ordinary_clinical_prose_match = _ordinary_clinical_prose_veto_metadata(
+        span,
+        original_text,
+    )
+    if ordinary_clinical_prose_match is not None:
+        return (
+            span.text,
+            "project_ordinary_clinical_prose_veto",
+            ordinary_clinical_prose_match["project_ordinary_clinical_prose_policy"],
+            ordinary_clinical_prose_match,
+        )
+
     ordinary_token_match = _ordinary_token_veto_metadata(span, original_text)
     if ordinary_token_match is not None:
         return (
@@ -754,17 +799,52 @@ def _clinical_code_veto_metadata(
 
     normalized = re.sub(r"[^A-Za-z0-9]+", "", token).upper()
     rule = _CLINICAL_CODE_CONTEXT_RULES.get(normalized)
-    if rule is None:
-        return None
-    context_name, context_terms = rule
-    if _context_contains(broad_context, context_terms):
-        return {
-            "project_clinical_code_policy": "preserved_contextual_clinical_code",
-            "project_clinical_code": token,
-            "project_clinical_code_context": context_name,
-        }
+    if rule is not None:
+        context_name, context_terms = rule
+        if _context_contains(broad_context, context_terms):
+            return {
+                "project_clinical_code_policy": "preserved_contextual_clinical_code",
+                "project_clinical_code": token,
+                "project_clinical_code_context": context_name,
+            }
+
+    vendor_rule = _VENDOR_REFERENCE_CONTEXT_RULES.get(normalized)
+    if vendor_rule is not None:
+        context_name, context_terms = vendor_rule
+        if _context_contains(broad_context, context_terms):
+            return {
+                "project_clinical_code_policy": "preserved_vendor_reference_metadata",
+                "project_clinical_code": token,
+                "project_clinical_code_context": context_name,
+            }
 
     return None
+
+
+def _ordinary_clinical_prose_veto_metadata(
+    span: PHISpan,
+    original_text: str,
+) -> dict[str, str] | None:
+    """Return metadata for low-risk ordinary clinical prose false positives."""
+    if span.label != "NAME":
+        return None
+
+    token = span.text.strip()
+    normalized = token.casefold()
+    rule = _ORDINARY_CLINICAL_PROSE_TERMS.get(normalized)
+    if rule is None:
+        return None
+
+    context_name, context_terms = rule
+    context = _span_context(original_text, span.start, span.end, window=90).casefold()
+    if not _context_contains(context, context_terms):
+        return None
+
+    return {
+        "project_ordinary_clinical_prose_policy": "preserved_contextual_clinical_prose",
+        "project_ordinary_clinical_prose": token,
+        "project_ordinary_clinical_prose_context": context_name,
+    }
 
 
 def _ordinary_token_veto_metadata(

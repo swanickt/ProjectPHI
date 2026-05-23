@@ -79,6 +79,9 @@ from .models import PHISpan
 # - project_clinical_code_policy: Clinical code/phrase false-positive policy.
 # - project_clinical_code: Clinical code or phrase preserved by the policy.
 # - project_clinical_code_context: Context family that allowed preservation.
+# - project_ordinary_clinical_prose_policy: Ordinary clinical prose false-positive policy.
+# - project_ordinary_clinical_prose: Ordinary clinical prose token preserved.
+# - project_ordinary_clinical_prose_context: Context family that allowed preservation.
 #
 # Audit rows intentionally omit PHISpan.text and original note text.
 AUDIT_COLUMNS = [
@@ -135,6 +138,9 @@ AUDIT_COLUMNS = [
     "project_clinical_code_policy",
     "project_clinical_code",
     "project_clinical_code_context",
+    "project_ordinary_clinical_prose_policy",
+    "project_ordinary_clinical_prose",
+    "project_ordinary_clinical_prose_context",
 ]
 
 
@@ -218,6 +224,13 @@ def _span_to_audit_row(
         "project_clinical_code_policy": span.metadata.get("project_clinical_code_policy"),
         "project_clinical_code": span.metadata.get("project_clinical_code"),
         "project_clinical_code_context": span.metadata.get("project_clinical_code_context"),
+        "project_ordinary_clinical_prose_policy": span.metadata.get(
+            "project_ordinary_clinical_prose_policy"
+        ),
+        "project_ordinary_clinical_prose": span.metadata.get("project_ordinary_clinical_prose"),
+        "project_ordinary_clinical_prose_context": span.metadata.get(
+            "project_ordinary_clinical_prose_context"
+        ),
     }
 
 

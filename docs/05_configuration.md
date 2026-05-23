@@ -520,6 +520,8 @@ Physical Assessment Tool`. The breast-cancer baseline also includes selected
 pathology, receptor, margin, nodal, staging, and systemic-therapy terms such as
 `atypical ductal hyperplasia`, `lymphovascular invasion`, `HER2-`, `Ki-67
 index`, `T3N0M0`, `sentinel lymph node dissection`, and `trastuzumab`.
+Additional span-local vetoes preserve selected ordinary clinical prose and
+non-geographic vendor/reference metadata in strong context.
 It is not a bulk export from NCIt, RadLex, SNOMED CT, UMLS, pyDeid wordlists,
 or any other external terminology source.
 

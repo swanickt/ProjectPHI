@@ -163,6 +163,15 @@ strongly supports a clinical read. Examples include GCS components such as
 as `STEC`, `WM`, `EBER`, `HAMN`, `GNAS`, `ROIs`, `JC`, and clinical exposure
 phrases such as `10 days drive`.
 
+ProjectPHI separately preserves selected ordinary clinical prose when pyDeid
+emits it as a `NAME` span in strong local context, such as `Blood` in `Blood
+pressure`, `Vital` in `Vital signs`, `Computed tomography`, `follow-up`, and
+similar low-risk clinical wording. It also preserves selected vendor or
+reference metadata such as `Varian`, `Caris`, `Promega`, and `Dako` only when
+nearby product, assay, manufacturer, or device context supports that read.
+Geography is not preserved by this rule; city/country names remain pyDeid
+fallback unless another explicit project rule applies.
+
 This is intentionally not a general identifier allow-list. Production
 deployments should mask known patient IDs, provider names, accession numbers,
 MRNs, local study IDs, and site-specific codes with explicit lists or custom
