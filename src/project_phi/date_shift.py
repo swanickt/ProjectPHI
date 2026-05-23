@@ -73,6 +73,7 @@ _NATURAL_LANGUAGE_MONTH_DAY_RE = re.compile(
     r"^\s*([A-Za-z]{3,9})\.?\s+([0-9]{1,2})(?:st|nd|rd|th)?\s*$",
     re.IGNORECASE,
 )
+_NUMERIC_MONTH_DAY_RE = re.compile(r"^\s*([0-9]{1,2})[-/]([0-9]{1,2})\s*$")
 _SLASH_SCORE_OR_FRACTION_RE = re.compile(r"^\s*\d{1,2}/\d{1,3}\s*$")
 _SLASH_APGAR_SCORE_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{1,2}\s*$")
 _TUMOR_MARKER_NUMBER_RE = re.compile(r"^\s*\d{1,2}(?:[-.]\d{1,2})\s*$")
@@ -329,14 +330,22 @@ def _is_parseable_partial_month_day_span(
     month/day granularity; the implementation uses an internal leap anchor year
     only for calendar arithmetic.
     """
+    if span.label != "DATE" or not _is_date_like_span(span):
+        return False
+
     parsed = span.metadata.get("parsed_phi") or {}
     return (
         parsed.get("kind") == "date"
         and parsed.get("day") not in (None, "")
         and parsed.get("month") not in (None, "")
-        and not str(parsed.get("month")).strip().isdigit()
         and parsed.get("year") in (None, "")
-    ) or _parse_natural_language_month_day(span.text) is not None
+        and (
+            not str(parsed.get("month")).strip().isdigit()
+            or _is_pydeid_month_day_type(span)
+        )
+    ) or _parse_natural_language_month_day(span.text) is not None or (
+        _is_pydeid_month_day_type(span) and _parse_numeric_month_day(span.text) is not None
+    )
 
 
 def _shift_full_date_span(
@@ -396,7 +405,7 @@ def _shift_partial_month_day_span(
 
     original_date = _month_day_date_from_parsed_phi(span)
     if original_date is None:
-        original_date = _parse_natural_language_month_day(span.text)
+        original_date = _parse_partial_month_day_text(span.text)
     if original_date is None:
         return None
 
@@ -561,6 +570,37 @@ def _parse_natural_language_month_day(
         return date(_MONTH_DAY_ANCHOR_YEAR, _month_number(month_text), int(day_text))
     except (KeyError, ValueError):
         return None
+
+
+def _parse_numeric_month_day(
+    text: str,  # Span-local pyDeid month/day text, possibly placeholder-wrapped.
+) -> date | None:
+    cleaned = _strip_placeholder_date_wrapper(text)
+    match = _NUMERIC_MONTH_DAY_RE.match(cleaned)
+    if not match:
+        return None
+
+    month_text, day_text = match.groups()
+    try:
+        return date(_MONTH_DAY_ANCHOR_YEAR, int(month_text), int(day_text))
+    except ValueError:
+        return None
+
+
+def _parse_partial_month_day_text(text: str) -> date | None:
+    return _parse_natural_language_month_day(text) or _parse_numeric_month_day(text)
+
+
+def _strip_placeholder_date_wrapper(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("[**") and stripped.endswith("**]"):
+        return stripped[3:-3].strip()
+    return stripped
+
+
+def _is_pydeid_month_day_type(span: PHISpan) -> bool:
+    types_text = " ".join(span.pydeid_types or []).casefold()
+    return "month/day" in types_text or "[mm/dd]" in types_text
 
 
 def _parse_natural_language_month_year(

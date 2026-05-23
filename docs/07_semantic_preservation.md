@@ -154,6 +154,20 @@ The built-in list is now considered the stable public baseline. Further
 semantic-preservation expansion should generally be driven by governed local
 evaluation and supplied as runtime protected-term CSV artifacts. 
 
+## Compact Clinical Codes
+
+ProjectPHI also preserves selected compact clinical codes and short clinical
+phrases when pyDeid has already emitted them as spans and bounded context
+strongly supports a clinical read. Examples include GCS components such as
+`E2V2M5`, TNM stages such as `T3N0M0`, contextual biomedical abbreviations such
+as `STEC`, `WM`, `EBER`, `HAMN`, `GNAS`, `ROIs`, `JC`, and clinical exposure
+phrases such as `10 days drive`.
+
+This is intentionally not a general identifier allow-list. Production
+deployments should mask known patient IDs, provider names, accession numbers,
+MRNs, local study IDs, and site-specific codes with explicit lists or custom
+regexes.
+
 ## Title-Context Action Words
 
 pyDeid can sometimes treat clinical action words after short titles as name

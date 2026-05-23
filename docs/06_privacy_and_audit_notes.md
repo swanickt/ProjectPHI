@@ -114,6 +114,9 @@ term because it is intentionally preserved.
 For selected risky eponym components, protected-term policy may also record the
 approved phrase context that allowed preservation. Those fields are still
 internal audit metadata, not training output.
+Compact clinical-code vetoes may preserve and audit values such as GCS
+components, TNM stages, and contextual biomedical abbreviations when pyDeid
+emitted them as spans and local context supports semantic preservation.
 
 The built-in protected term set is manually curated, general, and
 non-site-specific. It is a targeted breast/oncology/radiology and selected

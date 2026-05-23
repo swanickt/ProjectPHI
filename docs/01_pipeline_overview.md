@@ -108,12 +108,14 @@ Reconstruction priority:
 5. stable patient-name surrogate policy;
 6. stable provider-name surrogate policy;
 7. dotted decimal-like contact false-positive vetoes;
-8. ordinary-token vetoes for selected pyDeid name false positives, such as
+8. compact clinical-code and duration-phrase vetoes, such as GCS components,
+   TNM staging, and strongly contextual biomedical abbreviations;
+9. ordinary-token vetoes for selected pyDeid name false positives, such as
    articles/pronouns and guarded `NH` nursing-home shorthand;
-9. title-token-fragment vetoes for cases where pyDeid splits a
+10. title-token-fragment vetoes for cases where pyDeid splits a
    non-identifying `Dr.` token into name spans;
-10. title-context action-word veto;
-11. pyDeid replacement fallback.
+11. title-context action-word veto;
+12. pyDeid replacement fallback.
 
 Reconstruction fails closed on unexpected overlapping spans rather than
 silently preserving raw text.

@@ -76,6 +76,9 @@ from .models import PHISpan
 # - project_obstetric_history_pattern: Obstetric shorthand pattern family.
 # - project_decimal_code_policy: Dotted numeric contact false-positive policy.
 # - project_decimal_code_context: Local/grouping context that allowed preservation.
+# - project_clinical_code_policy: Clinical code/phrase false-positive policy.
+# - project_clinical_code: Clinical code or phrase preserved by the policy.
+# - project_clinical_code_context: Context family that allowed preservation.
 #
 # Audit rows intentionally omit PHISpan.text and original note text.
 AUDIT_COLUMNS = [
@@ -129,6 +132,9 @@ AUDIT_COLUMNS = [
     "project_obstetric_history_pattern",
     "project_decimal_code_policy",
     "project_decimal_code_context",
+    "project_clinical_code_policy",
+    "project_clinical_code",
+    "project_clinical_code_context",
 ]
 
 
@@ -209,6 +215,9 @@ def _span_to_audit_row(
         "project_obstetric_history_pattern": span.metadata.get("project_obstetric_history_pattern"),
         "project_decimal_code_policy": span.metadata.get("project_decimal_code_policy"),
         "project_decimal_code_context": span.metadata.get("project_decimal_code_context"),
+        "project_clinical_code_policy": span.metadata.get("project_clinical_code_policy"),
+        "project_clinical_code": span.metadata.get("project_clinical_code"),
+        "project_clinical_code_context": span.metadata.get("project_clinical_code_context"),
     }
 
 

@@ -516,7 +516,10 @@ evaluation showed semantic damage. Examples include `tomosynthesis`,
 `dose-dense AC-T`, `letrozole`, `clinical and radiographic remission`,
 `ECOG performance status`, `Karnofsky Performance Status`, `RECIST 1.1`,
 `CTCAE grade`, `JOA score`, `Fazekas grade`, and `Chelsea Critical Care
-Physical Assessment Tool`.
+Physical Assessment Tool`. The breast-cancer baseline also includes selected
+pathology, receptor, margin, nodal, staging, and systemic-therapy terms such as
+`atypical ductal hyperplasia`, `lymphovascular invasion`, `HER2-`, `Ki-67
+index`, `T3N0M0`, `sentinel lymph node dissection`, and `trastuzumab`.
 It is not a bulk export from NCIt, RadLex, SNOMED CT, UMLS, pyDeid wordlists,
 or any other external terminology source.
 

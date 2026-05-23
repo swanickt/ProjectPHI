@@ -48,6 +48,8 @@ Key pages:
   observed semantic-preservation failures.
 - Dotted decimal-like contact false-positive vetoes for code/measurement
   fragments that pyDeid emits as phone-like spans.
+- Compact clinical-code and phrase vetoes for strongly contextual scores,
+  stages, biomedical abbreviations, and duration/exposure phrases.
 - Runtime config loaders for patient alias manifests, provider alias manifests,
   custom regex JSON, and protected clinical terms CSV.
 - Internal audit CSV output for span-level review.

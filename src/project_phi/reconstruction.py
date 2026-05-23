@@ -217,6 +217,48 @@ _NIA_AA_CONTEXT_TERMS = (
     "nia-aa criteria",
 )
 
+_GCS_COMPONENT_RE = re.compile(r"^E[1-4]V[1-5]M[1-6]$", re.IGNORECASE)
+_TNM_STAGE_RE = re.compile(
+    r"^(?:[cpyra]{0,3})?T(?:is|[0-4][a-d]?|X)N(?:[0-3][a-d]?|X)M(?:0|1[a-c]?|X)$",
+    re.IGNORECASE,
+)
+_DURATION_TRAVEL_RE = re.compile(
+    r"^\d+(?:\.\d+)?\s*(?:day|days|week|weeks|hour|hours)\s+"
+    r"(?:drive|flight|walk|hike|trip|travel)$",
+    re.IGNORECASE,
+)
+
+_GCS_CONTEXT_TERMS = (
+    "gcs",
+    "glasgow",
+    "glasgow coma scale",
+)
+
+_TNM_CONTEXT_TERMS = (
+    "ajcc",
+    "cancer control",
+    "pathologic diagnosis",
+    "pathological diagnosis",
+    "stage",
+    "staging",
+    "tnm",
+    "tumor",
+    "tumour",
+    "union for international cancer control",
+)
+
+_CLINICAL_CODE_CONTEXT_RULES = {
+    "STEC": ("infectious_disease_abbreviation", ("e. coli", "shiga", "stool", "toxin")),
+    "WM": ("hematology_abbreviation", ("igm", "myd88", "waldenstrom", "macroglobulinemia")),
+    "EBER": ("pathology_marker", ("ebv", "immunohistochemical", "neoplastic", "pathology")),
+    "HAMN": ("pathology_abbreviation", ("appendiceal", "lamn", "mucinous", "neoplasm")),
+    "GNAS": ("gene_symbol", ("gene", "mutation", "variant", "snapshot", "molecular")),
+    "ROIS": ("imaging_measurement_abbreviation", ("axial", "image", "lesion", "region", "roi")),
+    "PH": ("clinical_abbreviation", ("pulmonary hypertension", "halt", "mdct", "valve")),
+    "JC": ("virus_abbreviation", ("virus", "pcr", "csf", "positive", "negative")),
+    "KEGG": ("bioinformatics_resource", ("pathway", "enrichment", "ras", "mapk", "pi3k")),
+}
+
 
 def _reconstruct_with_stable_dates(
     original_text: str,
@@ -614,6 +656,15 @@ def _project_replacement_for_span(
             decimal_code_match,
         )
 
+    clinical_code_match = _clinical_code_veto_metadata(span, original_text)
+    if clinical_code_match is not None:
+        return (
+            span.text,
+            "project_clinical_code_veto",
+            clinical_code_match["project_clinical_code_policy"],
+            clinical_code_match,
+        )
+
     ordinary_token_match = _ordinary_token_veto_metadata(span, original_text)
     if ordinary_token_match is not None:
         return (
@@ -658,6 +709,62 @@ def _project_replacement_for_span(
 
     # Final fallback for all other spans.
     return span.replacement or "<PHI>", "pyDeid", "pydeid_replacement", {}
+
+
+def _clinical_code_veto_metadata(
+    span: PHISpan,
+    original_text: str,
+) -> dict[str, str] | None:
+    """Return metadata for compact clinical codes and semantic phrases.
+
+    The rule is pyDeid-span-local. It preserves values whose syntax and bounded
+    context strongly indicate clinical meaning, leaving production-specific
+    identifiers to explicit lists or custom regexes.
+    """
+    if span.label not in {"NAME", "LOCATION", "HOSPITAL", "ID", "PHI"}:
+        return None
+
+    token = span.text.strip()
+    context = _span_context(original_text, span.start, span.end, window=140).casefold()
+    broad_context = _span_context(original_text, span.start, span.end, window=240).casefold()
+
+    if _GCS_COMPONENT_RE.match(token) and _context_contains(context, _GCS_CONTEXT_TERMS):
+        return {
+            "project_clinical_code_policy": "preserved_compact_clinical_code",
+            "project_clinical_code": token,
+            "project_clinical_code_context": "glasgow_coma_scale",
+        }
+
+    if _TNM_STAGE_RE.match(token) and _context_contains(broad_context, _TNM_CONTEXT_TERMS):
+        return {
+            "project_clinical_code_policy": "preserved_compact_clinical_code",
+            "project_clinical_code": token,
+            "project_clinical_code_context": "tnm_staging",
+        }
+
+    if _DURATION_TRAVEL_RE.match(token) and _context_contains(
+        broad_context,
+        ("altitude", "during a", "exposure", "travel", "visual", "symptoms"),
+    ):
+        return {
+            "project_clinical_code_policy": "preserved_clinical_duration_phrase",
+            "project_clinical_code": token,
+            "project_clinical_code_context": "duration_or_exposure_phrase",
+        }
+
+    normalized = re.sub(r"[^A-Za-z0-9]+", "", token).upper()
+    rule = _CLINICAL_CODE_CONTEXT_RULES.get(normalized)
+    if rule is None:
+        return None
+    context_name, context_terms = rule
+    if _context_contains(broad_context, context_terms):
+        return {
+            "project_clinical_code_policy": "preserved_contextual_clinical_code",
+            "project_clinical_code": token,
+            "project_clinical_code_context": context_name,
+        }
+
+    return None
 
 
 def _ordinary_token_veto_metadata(
