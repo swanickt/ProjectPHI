@@ -106,6 +106,45 @@ def test_reconstruction_preserves_nh_only_in_nursing_home_context():
     assert spans[0].metadata["project_ordinary_token_category"] == "nursing_home"
 
 
+def test_reconstruction_preserves_split_at_fragment_before_numeric_context():
+    examples = [
+        "She presented at 10 weeks' gestation.",
+        "The medication was given at 5 pm.",
+        "The pressure was checked at 165/90 mm Hg.",
+        "Follow-up was planned at 6-week interval.",
+    ]
+
+    for note in examples:
+        span = _name_span("t", note.index("at ") + 1, replacement="Daniel", pydeid_types=["Name Initial (PRE)"])
+
+        text, spans, warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+        assert text == note
+        assert warnings == []
+        assert spans[0].metadata["replacement_source"] == "project_ordinary_token_veto"
+        assert spans[0].metadata["project_ordinary_token_policy"] == "preserved_split_at_fragment"
+        assert spans[0].metadata["project_ordinary_token_category"] == (
+            "split_at_numeric_time_context"
+        )
+
+
+def test_reconstruction_does_not_preserve_split_at_fragment_without_numeric_context():
+    examples = [
+        ("She was treated at Sunnybrook.", "She was treated aDaniel Sunnybrook."),
+        ("She arrived at clinic.", "She arrived aDaniel clinic."),
+        ("The t marker was recorded.", "The Daniel marker was recorded."),
+    ]
+
+    for note, expected_text in examples:
+        start = note.index("t") if " t " in note else note.index("at ") + 1
+        span = _name_span("t", start, replacement="Daniel", pydeid_types=["Name Initial (PRE)"])
+
+        text, spans, _warnings = reconstruction._reconstruct_with_project_replacements(note, [span])
+
+        assert text == expected_text
+        assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
 def test_reconstruction_does_not_preserve_article_in_initial_contexts():
     examples = [
         ("A. Smith reviewed the note.", "A"),

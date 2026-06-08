@@ -90,6 +90,10 @@ def test_reconstruction_preserves_contextual_biomedical_abbreviations():
         ("MDCT showed reduced MR and PH after valve treatment.", "PH"),
         ("JC virus quantitative PCR was positive in CSF.", "JC"),
         ("KEGG pathway enrichment analysis was performed.", "KEGG"),
+        ("The fetal chromosome karyotype was 46, XY, del (18).", "XY"),
+        ("The fetal chromosome karyotype was 46, XY, del (18).", "del"),
+        ("A standard Brockenbrough needle was used for transseptal access.", "Brock"),
+        ("Bilateral lesions covered the Vo and ventral intermediate nuclei.", "Vo"),
     ]
 
     for note, token in examples:
@@ -121,6 +125,14 @@ def test_reconstruction_preserves_ordinary_clinical_prose():
         ("She presented for a pre-employment examination.", "pre-employment", "exam_context_prose"),
         ("The chest tube was clamped.", "clamped", "procedure_prose"),
         ("The general practitioners reviewed the case.", "general", "clinical_role_prose"),
+        ("He returned for a follow-up examination.", "follow-up", "follow_up_prose"),
+        ("A clinic for low-income residents provided care.", "low-income", "social_context_prose"),
+        ("Homecare staff helped with medications.", "Homecare", "care_context_prose"),
+        ("MR imaging findings suggested demyelination.", "findings", "imaging_findings_prose"),
+        ("She was treated by a practitioner with topical antibiotics.", "with", "treatment_prose"),
+        ("MDCT showed resolution of HALT and RLM after treatment.", "and", "cardiology_or_abbreviation_prose"),
+        ("Prior to the accident, he drank beer daily.", "Prior", "temporal_prose"),
+        ("He came to the physician in December for episodic shortness of breath.", "December", "month_reference_prose"),
     ]
 
     for note, token, context_name in examples:
@@ -165,6 +177,15 @@ def test_reconstruction_preserves_vendor_reference_metadata_without_geography():
         ("A Biosense Webster ablation catheter was used.", "Webster"),
         ("The Biosense Webster catheter is made by Johnson & Johnson Medical.", "Johnson"),
         ("The Prolene suture was from Johnson & Johnson.", "Johnson"),
+        ("Isolates were identified using the VITEK 2 system.", "VITEK"),
+        ("A SOFIA catheter from MicroVention was advanced.", "SOFIA"),
+        ("ICP-MS used the Varian 810-MS platform.", "Varian"),
+        ("Samples were collected in Streck DNA BCT tubes.", "Streck"),
+        ("The cfDNA profile was checked on an Agilent Bioanalyzer.", "Agilent"),
+        ("A 29 mm Edwards Sapien 3 valve was placed.", "Sapien"),
+        ("Drainage used the MERA Sacuum suction unit.", "MERA"),
+        ("Direct dental composite restorations used Herculite Kerr.", "Kerr"),
+        ("Rigorous polishing used a Kulzer tool kit.", "Kulzer"),
     ]
 
     for note, token in examples:

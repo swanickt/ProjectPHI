@@ -76,6 +76,11 @@ This is intentionally conservative. ProjectPHI does not preserve arbitrary
 short uppercase tokens, and it does not override pyDeid in contexts such as
 `A. Smith`, `Dr. A`, `Patient A`, `Subject A`, or `Case A`.
 
+ProjectPHI also preserves a lowercase `t` span only when pyDeid appears to
+have split the word `at` immediately before numeric, time, or measurement
+context, such as `at 10 weeks' gestation` or `at 5 pm`. It does not preserve
+arbitrary `t` initials or `at` before locations, facilities, or ordinary words.
+
 ## Patient Name Semantics
 
 Stable patient-name surrogates require explicit aliases. The wrapper does not infer
@@ -144,8 +149,9 @@ span-local and avoids turning risky eponyms into blanket allow-list entries.
 The same approach is used for selected observed fragments such as `Paddick` in
 `Paddick index`, `Hamilton` in Hamilton scales, `Willebrand` in
 `von Willebrand factor`, `P.` in `P. insidiosum`, `GIA` in `Endo-GIA`, `M` in
-`Sof-lex/3 M ESPE`, `veno` in `veno-venous`, `hemi` in `hemi-abdomen`, and
-`dermo` in `dermo-hypodermal`.
+`Sof-lex/3 M ESPE`, `Jackson`/`Pratt` in `Jackson-Pratt`, `McFarland` in
+`0.5 McFarland`, `veno` in `veno-venous` or `veno-occlusive disease`, `hemi`
+in `hemi-abdomen` or `hemi-diaphragm`, and `dermo` in `dermo-hypodermal`.
 
 Residual risk is explicit: a rare person, facility, or organization could share
 a protected clinical term. That tradeoff is accepted only for internal
@@ -167,10 +173,13 @@ phrases such as `10 days drive`.
 ProjectPHI separately preserves selected ordinary clinical prose when pyDeid
 emits it as a `NAME` span in strong local context, such as `Blood` in `Blood
 pressure`, `Vital` in `Vital signs`, `Computed tomography`, `follow-up`, and
-similar low-risk clinical wording. It also preserves selected vendor or
-reference metadata such as `Varian`, `Caris`, `Promega`, `Dako`, `Webster`,
-and `Johnson` only when nearby product, assay, manufacturer, or device context
-supports that read.
+similar low-risk clinical wording. For internal semantic preservation, exact
+bounded terms such as `follow-up`, `homecare`, `low-income`,
+`diabetes mellitus`, and `do-not-resuscitate` are treated as low-risk clinical
+or care-context text when pyDeid emits them as spans. It also preserves
+selected vendor or reference metadata such as `Varian`, `Caris`, `Promega`,
+`Dako`, `Webster`, `Johnson`, `VITEK`, `SOFIA`, `Agilent`, and `Kerr` only
+when nearby product, assay, manufacturer, or device context supports that read.
 Geography is not preserved by this rule; city/country names remain pyDeid
 fallback unless another explicit project rule applies.
 

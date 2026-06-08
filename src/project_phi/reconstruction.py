@@ -257,6 +257,10 @@ _CLINICAL_CODE_CONTEXT_RULES = {
     "PH": ("clinical_abbreviation", ("pulmonary hypertension", "halt", "mdct", "valve")),
     "JC": ("virus_abbreviation", ("virus", "pcr", "csf", "positive", "negative")),
     "KEGG": ("bioinformatics_resource", ("pathway", "enrichment", "ras", "mapk", "pi3k")),
+    "XY": ("karyotype_notation", ("karyotype", "chromosome", "chromosomal", "amniocentesis", "cnv")),
+    "DEL": ("karyotype_notation", ("karyotype", "chromosome", "chromosomal", "amniocentesis", "cnv")),
+    "BROCK": ("procedure_eponym_fragment", ("brockenbrough", "transseptal", "needle")),
+    "VO": ("neuroanatomy_abbreviation", ("ventral intermediate", "vim", "nuclei", "thalamotomy")),
 }
 
 _ORDINARY_CLINICAL_PROSE_TERMS = {
@@ -267,19 +271,26 @@ _ORDINARY_CLINICAL_PROSE_TERMS = {
     "cultures": ("culture_prose", ("blood", "urine", "wound", "grew", "negative", "positive")),
     "culture": ("culture_prose", ("blood", "urine", "wound", "grew", "negative", "positive")),
     "topical": ("treatment_prose", ("antibiotic", "antibiotics", "steroid", "steroids", "therapy")),
-    "follow-up": ("follow_up_prose", ("visit", "after", "appointment", "months", "weeks", "scheduled")),
+    "follow-up": ("follow_up_prose", ("visit", "after", "appointment", "months", "weeks", "scheduled", "examination", "care")),
     "well-child": ("well_child_prose", ("examination", "visit", "clinic")),
-    "left-sided": ("laterality_prose", ("pain", "weakness", "lesion", "procedure", "surgery")),
+    "left-sided": ("laterality_prose", ("pain", "weakness", "lesion", "procedure", "surgery", "abdominal", "discomfort")),
     "low-risk": ("risk_status_prose", ("disease", "mds", "tumor", "tumour", "patient")),
+    "low-income": ("social_context_prose", ("clinic", "resident", "residents", "housing", "support", "assistance")),
     "pre-employment": ("exam_context_prose", ("examination", "exam")),
     "clamped": ("procedure_prose", ("tube", "drain", "catheter")),
     "clamping": ("procedure_prose", ("tube", "drain", "catheter")),
     "general": ("clinical_role_prose", ("practitioner", "practitioners", "practice")),
     "practitioners": ("clinical_role_prose", ("general", "home care", "doctors")),
+    "homecare": ("care_context_prose", ("staff", "agency", "help", "medications", "mother", "support")),
+    "findings": ("imaging_findings_prose", ("imaging", "mr", "mri", "ct", "presentation")),
+    "with": ("treatment_prose", ("topical antibiotics", "treated", "private practitioner")),
+    "and": ("cardiology_or_abbreviation_prose", ("mr and ph", "halt and rlm", "mdct")),
+    "prior": ("temporal_prose", ("prior to", "accident", "surgery", "surgeries")),
+    "december": ("month_reference_prose", ("physician in", "episodic", "shortness", "winter")),
 }
 
 _VENDOR_REFERENCE_CONTEXT_RULES = {
-    "VARIAN": ("vendor_reference_metadata", ("truebeam", "hyperarc", "linac", "medical systems")),
+    "VARIAN": ("vendor_reference_metadata", ("truebeam", "hyperarc", "linac", "medical systems", "810-ms", "icp-ms")),
     "SRL": ("vendor_reference_metadata", ("clonit", "assay", "variant catcher", "pcr")),
     "CARIS": ("vendor_reference_metadata", ("life science", "laboratory", "sequencing")),
     "PROMEGA": ("vendor_reference_metadata", ("powerplex", "kit", "multiplex")),
@@ -287,7 +298,7 @@ _VENDOR_REFERENCE_CONTEXT_RULES = {
     "SENKO": ("vendor_reference_metadata", ("medical", "instrument", "mera")),
     "BRUKER": ("vendor_reference_metadata", ("maldi", "tof", "database", "spectrum")),
     "DAKO": ("vendor_reference_metadata", ("clone", "antibody", "immunohistochemical")),
-    "VITEK": ("vendor_reference_metadata", ("maldi", "tof", "blood cultures", "spectrometry")),
+    "VITEK": ("vendor_reference_metadata", ("maldi", "tof", "blood cultures", "spectrometry", "system", "isolates", "biomérieux", "biomerieux")),
     "ELLA": ("vendor_reference_metadata", ("prosthesis", "ella-cs", "esophageal")),
     "ESPE": ("vendor_reference_metadata", ("3m", "3 m", "dental", "restoration")),
     "WEBSTER": (
@@ -298,6 +309,18 @@ _VENDOR_REFERENCE_CONTEXT_RULES = {
         "vendor_reference_metadata",
         ("johnson & johnson", "& johnson", "biosense webster", "ethicon", "prolene"),
     ),
+    "RAMSEY": ("vendor_reference_metadata", ("petmap", "blood pressure", "medical", "device")),
+    "INGELHEIM": ("vendor_reference_metadata", ("boehringer", "vetmedin", "pimobendan")),
+    "AMRHEIN": ("vendor_reference_metadata", ("boehringer", "ingelheim", "vetmedin")),
+    "ZAMBON": ("vendor_reference_metadata", ("flagyl", "metronidazole", "antibiotic")),
+    "STRECK": ("vendor_reference_metadata", ("dna bct", "cfdna", "blood collected", "tube")),
+    "AGILENT": ("vendor_reference_metadata", ("bioanalyzer", "dna chips", "cfdna", "sequencing")),
+    "SOFIA": ("vendor_reference_metadata", ("catheter", "microvention", "terumo", "intracranial")),
+    "SMITH": ("vendor_reference_metadata", ("nephew", "renasis", "vac", "negative pressure wound therapy")),
+    "SAPIEN": ("vendor_reference_metadata", ("edwards", "valve", "tavr")),
+    "MERA": ("vendor_reference_metadata", ("sacuum", "suction", "senko", "drainage")),
+    "KERR": ("vendor_reference_metadata", ("herculite", "premise", "dental", "composite", "restoration")),
+    "KULZER": ("vendor_reference_metadata", ("tool kit", "polishing", "restoration", "dental")),
 }
 
 
@@ -887,6 +910,13 @@ def _ordinary_token_veto_metadata(
             "project_ordinary_token_category": "nursing_home",
         }
 
+    if token == "t" and _is_split_at_before_numeric_or_time_context(span, original_text):
+        return {
+            "project_ordinary_token_policy": "preserved_split_at_fragment",
+            "project_ordinary_token": token,
+            "project_ordinary_token_category": "split_at_numeric_time_context",
+        }
+
     return None
 
 
@@ -1104,3 +1134,29 @@ def _has_nursing_home_context(
     return any(after.startswith(term) for term in _NH_CONTEXT_AFTER) or any(
         term in before for term in _NH_CONTEXT_BEFORE
     )
+
+
+def _is_split_at_before_numeric_or_time_context(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true for pyDeid splitting `at` before numeric/time context."""
+    if span.start < 1 or original_text[span.start - 1] != "a":
+        return False
+
+    before_a_index = span.start - 2
+    if before_a_index >= 0 and (
+        original_text[before_a_index].isalnum() or original_text[before_a_index] == "_"
+    ):
+        return False
+
+    after = original_text[span.end : min(len(original_text), span.end + 40)]
+    return re.match(
+        r"^\s+(?:"
+        r"\d+(?:[./:]\d+)?(?:-\w+)?"
+        r"|noon\b"
+        r"|midnight\b"
+        r")",
+        after,
+        re.IGNORECASE,
+    ) is not None

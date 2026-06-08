@@ -202,6 +202,36 @@ system or a broad free-text person detector.
 
   This is an audit-cleanliness fix, not a de-identified text correctness fix.
 
+## 5. External 1000-Note Eval Still Has Medium-Priority Precision Candidates
+
+### Problem
+
+The June 8, 2026 rerun of the local 1000-note Open-Patients smoke evaluation,
+after the internal semantic-preservation expansion, had no high-priority
+semantic, formatting, or obvious residual contact-pattern issues, but it still
+produced medium-priority precision candidates where pyDeid replacement may
+remove useful source meaning.
+
+Current groups include:
+
+- geography, institution, and care-site metadata intentionally left to pyDeid;
+- a few short-fragment cases, such as `de` and person-like `XY`, that are not
+  safe to preserve broadly.
+
+### Reason
+
+Many of these strings overlap with person names, institutions, care sites,
+vendors, or places. Preserving them globally would increase identifier risk.
+The current policy therefore keeps pyDeid fallback unless a rule can be bounded
+to a low-risk clinical phrase or governed local policy.
+
+### Potential Solution
+
+Continue adding exact, phrase-bound, or context-bound semantic-preservation
+rules for low-risk clinical variants, especially those likely to occur in
+breast oncology notes. Keep geography, institutions, care sites, and local
+site metadata governed outside the public built-in list.
+
 ## Other:
 
 Date shift format changes:
