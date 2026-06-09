@@ -255,9 +255,12 @@ _GENOMIC_COORDINATE_CONTEXT_TERMS = (
     "arr ",
     "base pair",
     "base pairs",
+    "alteration",
+    "alterations",
     "breakpoint",
     "breakpoints",
     "cgh",
+    "chr",
     "chromosomal",
     "chromosome",
     "copy number",
@@ -305,10 +308,23 @@ _CLINICAL_CODE_CONTEXT_RULES = {
     "KEGG": ("bioinformatics_resource", ("pathway", "enrichment", "ras", "mapk", "pi3k")),
     "XY": ("karyotype_notation", ("karyotype", "chromosome", "chromosomal", "amniocentesis", "cnv")),
     "DEL": ("karyotype_notation", ("karyotype", "chromosome", "chromosomal", "amniocentesis", "cnv")),
+    "IMM": ("pathology_report_abbreviation", ("imm recut", "neg cont", "neg-her2", "her2", "er-c", "pr-c", "special stain")),
+    "AXT": ("pathology_report_abbreviation", ("axillary tail", "breast", "block", "site")),
+    "KER": ("pathology_report_abbreviation", ("cytokeratin cocktail", "cytokeratin", "keratin")),
+    "MAK": ("pathology_marker", ("mak-6", "ema", "desmin", "myogenin", "actin")),
+    "LYM": ("lab_abbreviation", ("lym%", "lymphocyte", "lymphocytes", "lymph")),
+    "FS": ("pathology_report_abbreviation", ("frozen section", "intraoperative", "fs:", "fs.", "fs ")),
     "BROCK": ("procedure_eponym_fragment", ("brockenbrough", "transseptal", "needle")),
     "VO": ("neuroanatomy_abbreviation", ("ventral intermediate", "vim", "nuclei", "thalamotomy")),
     "IOPA": ("dental_radiograph_abbreviation", ("radiograph", "radiographic", "intra-oral", "periapical")),
     "CUN": ("acupuncture_measurement", ("acupuncture", "acupoint", "depth", "inserted", "needle", "needles")),
+    "ASMA": ("autoantibody_abbreviation", ("anti-smooth muscle", "smooth muscle antibody", "autoimmune", "auto-immune", "antibody", "stain", "stains", "desmin")),
+    "FUHRMAN": ("pathology_grade_eponym", ("grade", "nuclear", "renal", "rcc", "carcinoma", "pathology")),
+    "ALLRED": ("pathology_score_eponym", ("score", "scoring", "proportion", "intensity", "er", "estrogen", "receptor")),
+    "LAUREN": ("pathology_classification_eponym", ("intestinal type", "diffuse type", "gastric", "histologic type", "classification", "typus intestinalis")),
+    "HEMI": ("clinical_prefix_fragment", ("hemicraniectomy", "hemicolectomy", "hemi-colectomy", "hemiparesis", "hemiplegia", "hemihepatectomy", "hemi-hepatectomy", "hemilaminectomy", "hemi-laminectomy", "hemithyroidectomy", "hemi-thyroidectomy", "hemimaxillectomy", "hemi-maxillectomy", "hemi-scrotum", "hemi-pelvis", "hemi-vertebrae", "hemi-cord", "hemisensory", "hemi-epifysiodesis", "hemi-thorax", "hemithorax", "hemi-trigone", "hemi-crvo", "hemifacial")),
+    "COLL": ("pathology_report_template_fragment", ("date coll", "coll. time", "time in formalin", "collected", "collection", "specimen")),
+    "GROU": ("pathology_report_template_fragment", ("provider group", "reporting group", "group")),
 }
 
 _ORDINARY_CLINICAL_PROSE_TERMS = {
@@ -335,6 +351,25 @@ _ORDINARY_CLINICAL_PROSE_TERMS = {
     "and": ("cardiology_or_abbreviation_prose", ("mr and ph", "halt and rlm", "mdct")),
     "prior": ("temporal_prose", ("prior to", "accident", "surgery", "surgeries")),
     "december": ("month_reference_prose", ("physician in", "episodic", "shortness", "winter")),
+    "gross": ("pathology_report_header_prose", ("description", "specimen", "pathology", "diagnosis", "section")),
+    "diagnosis": ("pathology_report_header_prose", ("dr. diagnosis", "final", "pathologic", "pathology", "clinical", "pre-op", "post-op", "addendum", "revised", "permanent")),
+    "pathology": ("pathology_report_header_prose", ("pathology report", "pathology service", "report", "surgical", "department", "final", "diagnosis")),
+    "clinical": ("pathology_report_header_prose", ("clinical history", "clinical data", "clinical information")),
+    "history": ("pathology_report_header_prose", ("clinical history", "history:", "medical history")),
+    "microscopic": ("pathology_report_header_prose", ("microscopic/diagnostic", "microscopic description", "microscopic diagnosis", "microscopic examination")),
+    "surgical": ("pathology_report_header_prose", ("surgical pathol", "surgical pathology", "surgical margins", "surgical specimen")),
+    "addendum": ("pathology_report_header_prose", ("addendum:", "addendum report", "start of addendum", "date complete", "oncotype dx")),
+    "comment": ("pathology_report_header_prose", ("comment:", "see comment", "diagnosis", "pathology report")),
+    "specimen": ("pathology_report_header_prose", ("specimen received", "specimen is received", "specimen size", "specimen weight", "specimen type", "received fresh", "labeled", "labelled")),
+    "margins": ("pathology_report_header_prose", ("surgical margins", "resection margins", "margins involved", "margins uninvolved")),
+    "margin": ("pathology_report_header_prose", ("surgical margin", "resection margin", "deep margin", "margin negative", "margin positive", "margin involved", "margin uninvolved")),
+    "final": ("pathology_report_header_prose", ("final diagnosis", "final pathologic", "final review")),
+    "tumor": ("pathology_report_header_prose", ("tumor size", "tumor type", "tumor site", "tumor grade")),
+    "consultation": ("pathology_report_header_prose", ("intraoperative", "frozen", "section", "pathology")),
+    "intraoperative": ("pathology_report_header_prose", ("consultation", "frozen", "section", "pathology")),
+    "record": ("medical_record_prose", ("medical record", "record review", "record no", "record number", "physician of record")),
+    "record.": ("medical_record_prose", ("medical record", "record review", "record no", "record number", "physician of record")),
+    "score": ("clinical_score_prose", ("mrs score", "nihss score", "ecog score", "karnofsky score", "bi-rads score", "allred score", "nottingham score")),
 }
 
 _VENDOR_REFERENCE_CONTEXT_RULES = {
@@ -369,9 +404,21 @@ _VENDOR_REFERENCE_CONTEXT_RULES = {
     "MERA": ("vendor_reference_metadata", ("sacuum", "suction", "senko", "drainage")),
     "KERR": ("vendor_reference_metadata", ("herculite", "premise", "dental", "composite", "restoration")),
     "KULZER": ("vendor_reference_metadata", ("tool kit", "polishing", "restoration", "dental")),
-    "ZEISS": ("vendor_reference_metadata", ("axioplan", "microscope", "fluorescent", "fish", "cohu-ccd")),
+    "ZEISS": ("vendor_reference_metadata", ("carl zeiss", "axioplan", "cirrus", "hd-oct", "oct", "microscope", "microscopy", "fluorescent", "fish", "cohu-ccd", "lens", "camera")),
     "VYSIS": ("vendor_reference_metadata", ("fish", "probe", "probes", "protocol", "hybridization")),
     "VINCI": ("vendor_reference_metadata", ("da vinci", "robot", "robotic", "surgical system", "intuitive surgical")),
+    "ROCHE": ("vendor_reference_metadata", ("hoffmann-la roche", "hoffmann la roche", "tecentriq", "atezolizumab", "basel", "ag")),
+    "ABBOTT": ("vendor_reference_metadata", ("perclose", "proglide", "pro-glide", "smc", "vascular closure")),
+    "STRYKER": ("vendor_reference_metadata", ("neurovascular", "trevo", "surpass", "gdc", "gamma3", "intramedullary nail", "pressure monitor", "compartment pressure", "coil", "coils", "trident", "accolade", "acetabular cup", "femoral stem", "femoral prosthesis", "orthopaedic", "orthopedic", "surgical navigation", "endoscopy", "implant", "excelsior", "microcatheter", "xt-27")),
+    "ZIMMER": ("vendor_reference_metadata", ("biomet", "dental", "implant", "prosthesis", "orthopedic", "orthopaedic", "knee", "hip")),
+    "SOMANETICS": ("vendor_reference_metadata", ("invos", "cerebral oximeter", "oximeter", "near-infrared", "nirs")),
+    "MAYFIELD": ("vendor_reference_metadata", ("clamp", "holder", "head holder", "skull clamp", "three-pin", "frame", "fixation")),
+    "BAYER": ("vendor_reference_metadata", ("animal health", "baytril", "advantix", "seresto", "progynova", "hema-tek", "reandron", "schering", "centaur", "chemiluminometric", "assay", "contrast", "pharmaceutical", "gadovist", "magnevist", "xarelto", "aspirin", "healthcare", "drontal")),
+    "TOMEY": ("vendor_reference_metadata", ("topographer", "corneal", "ophthalmic", "keratometer")),
+    "MARQUE": ("vendor_reference_metadata", ("cell marque", "clone", "antibody", "immunohistochemical")),
+    "GOODMAN": ("vendor_reference_metadata", ("lacrosse", "balloon catheter", "catheter")),
+    "PHILIPS": ("vendor_reference_metadata", ("ingenuity", "ct simulation", "ct simulator", "scanner", "computed tomography")),
+    "SIEMENS": ("vendor_reference_metadata", ("symphony", "1.5t", "mri", "magnetic resonance", "scanner")),
 }
 
 
@@ -467,7 +514,10 @@ def _reconstruct_with_project_replacements(
     warnings: list[str] = []
     cursor = 0
     final_offset = 0
-    sorted_spans, overlap_warnings = _prune_resolvable_overlapping_spans(spans)
+    sorted_spans, overlap_warnings = _prune_resolvable_overlapping_spans(
+        spans,
+        original_text=original_text,
+    )
     warnings.extend(overlap_warnings)
 
     for span in sorted_spans:
@@ -539,6 +589,8 @@ def _reconstruct_with_project_replacements(
 
 def _prune_resolvable_overlapping_spans(
     spans: list[PHISpan],
+    *,
+    original_text: str = "",
 ) -> tuple[list[PHISpan], list[str]]:
     """Prune deterministic low-risk overlaps before reconstruction.
 
@@ -546,9 +598,18 @@ def _prune_resolvable_overlapping_spans(
     spans. Reconstruction can safely proceed when one span is clearly the better
     replacement range. Mixed unresolved overlaps still fail closed downstream.
     """
-    accepted: list[PHISpan] = []
     warnings: list[str] = []
-    for candidate in sorted(spans, key=lambda item: (item.start, item.end)):
+    candidate_spans: list[PHISpan] = []
+    for span in spans:
+        if _span_inside_genomic_coordinate_token(span, original_text) and any(
+            other is not span and _spans_overlap(span, other) for other in spans
+        ):
+            warnings.append("pyDeid span inside genomic coordinate dropped during reconstruction.")
+            continue
+        candidate_spans.append(span)
+
+    accepted: list[PHISpan] = []
+    for candidate in sorted(candidate_spans, key=lambda item: (item.start, item.end)):
         current: PHISpan | None = candidate
         while current is not None and accepted and current.start < accepted[-1].end:
             previous = accepted[-1]
@@ -561,10 +622,50 @@ def _prune_resolvable_overlapping_spans(
                 warnings.append("Overlapping pyDeid span dropped during reconstruction.")
                 accepted.pop()
                 continue
-            return sorted(spans, key=lambda item: (item.start, item.end)), warnings
+            return sorted(candidate_spans, key=lambda item: (item.start, item.end)), warnings
         if current is not None:
             accepted.append(current)
     return accepted, warnings
+
+
+_GENOMIC_COORDINATE_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:"
+    r"(?:chr)?(?:[0-9]{1,2}|X|Y|MT):[0-9,]{6,}[-\u2013][0-9,]{6,}"
+    r"|[0-9,]{6,}[-\u2013][0-9,]{6,}"
+    r")(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
+
+
+def _span_inside_genomic_coordinate_token(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true for pyDeid spans wholly inside genomic coordinate tokens."""
+    if not original_text:
+        return False
+
+    context = _span_context(original_text, span.start, span.end, window=220).casefold()
+    if not _context_contains(context, _GENOMIC_COORDINATE_CONTEXT_TERMS):
+        return False
+
+    window_start = max(0, span.start - 48)
+    window_end = min(len(original_text), span.end + 48)
+    window = original_text[window_start:window_end]
+    for match in _GENOMIC_COORDINATE_TOKEN_RE.finditer(window):
+        start = window_start + match.start()
+        end = window_start + match.end()
+        if start <= span.start and span.end <= end:
+            return True
+    return False
+
+
+def _spans_overlap(
+    left: PHISpan,
+    right: PHISpan,
+) -> bool:
+    """Return true when two original-note spans overlap."""
+    return right.start < left.end and right.end > left.start
 
 
 def _preferred_overlap_span(
@@ -898,12 +999,22 @@ def _clinical_code_veto_metadata(
     context strongly indicate clinical meaning, leaving production-specific
     identifiers to explicit lists or custom regexes.
     """
-    if span.label not in {"NAME", "LOCATION", "HOSPITAL", "ID", "PHI"}:
-        return None
-
     token = span.text.strip()
     context = _span_context(original_text, span.start, span.end, window=140).casefold()
     broad_context = _span_context(original_text, span.start, span.end, window=240).casefold()
+
+    if span.label in {"TIME", "CONTACT", "ID"} and _span_inside_genomic_coordinate_token(
+        span,
+        original_text,
+    ):
+        return {
+            "project_clinical_code_policy": "preserved_contextual_clinical_code",
+            "project_clinical_code": token,
+            "project_clinical_code_context": "genomic_coordinate_token",
+        }
+
+    if span.label not in {"NAME", "LOCATION", "HOSPITAL", "ID", "PHI"}:
+        return None
 
     if _GCS_COMPONENT_RE.match(token) and _context_contains(context, _GCS_CONTEXT_TERMS):
         return {
@@ -940,6 +1051,20 @@ def _clinical_code_veto_metadata(
         }
 
     normalized = re.sub(r"[^A-Za-z0-9]+", "", token).upper()
+    if (
+        token == "URA"
+        and _span_has_nonword_boundaries(span, original_text)
+        and _context_contains(
+            broad_context,
+            ("upper renal artery", "renal artery", "angiogram", "aneurysm", "kidney"),
+        )
+    ):
+        return {
+            "project_clinical_code_policy": "preserved_contextual_clinical_code",
+            "project_clinical_code": token,
+            "project_clinical_code_context": "upper_renal_artery_abbreviation",
+        }
+
     rule = _CLINICAL_CODE_CONTEXT_RULES.get(normalized)
     if rule is not None:
         context_name, context_terms = rule
@@ -1216,6 +1341,16 @@ def _site_acronym_type(span: PHISpan) -> bool:
 def _context_contains(context: str, terms: tuple[str, ...]) -> bool:
     """Return true when any configured cue appears in casefolded context."""
     return any(term in context for term in terms)
+
+
+def _span_has_nonword_boundaries(span: PHISpan, original_text: str) -> bool:
+    """Return true when a span is not embedded in a larger word token."""
+    before = original_text[span.start - 1] if span.start > 0 else ""
+    after = original_text[span.end] if span.end < len(original_text) else ""
+    return (
+        (not before or not (before.isalnum() or before == "_"))
+        and (not after or not (after.isalnum() or after == "_"))
+    )
 
 
 def _is_nia_aa_component(

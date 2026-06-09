@@ -155,10 +155,16 @@ The same approach is used for selected observed fragments such as `Paddick` in
 `Paddick index`, `Hamilton` in Hamilton scales, `Willebrand` in
 `von Willebrand factor`, `P.` in `P. insidiosum`, `GIA` in `Endo-GIA`, `M` in
 `Sof-lex/3 M ESPE`, `Jackson`/`Pratt` in `Jackson-Pratt`, `McFarland` in
-`0.5 McFarland`, `veno` in `veno-venous` or `veno-occlusive disease`, `hemi`
-in `hemi-abdomen` or `hemi-diaphragm`, `Fuhrman` in `Fuhrman nuclear grade`,
-`Scarff` in `Scarff-Bloom-Richardson`, `Cormack`/`Lehane` in
-`Cormack-Lehane`, and `dermo` in `dermo-hypodermal`.
+`0.5 McFarland`, `au` in `cafe-au-lait`, `veno` in `veno-venous` or
+`veno-occlusive disease`, `hemi` in `hemi-abdomen`, `hemi-diaphragm`,
+`hemi-thorax`, `hemi-trigone`, or `hemi-CRVO`, `Fuhrman` in
+`Fuhrman nuclear grade`, `Allred` in Allred scoring terms, `Scarff` in
+`Scarff-Bloom-Richardson`,
+`Cormack`/`Lehane` in `Cormack-Lehane`, and `dermo` in
+`dermo-hypodermal`. Additional guarded eponym/fragment examples include
+`Ishak` in fibrosis staging, `Grocott` in stain contexts, `Hertel` in
+exophthalmometry contexts, `Naranjo` in adverse-drug-reaction probability
+scale contexts, and `de`/`sac` only in bounded `cul-de-sac` phrases.
 
 Residual risk is explicit: a rare person, facility, or organization could share
 a protected clinical term. That tradeoff is accepted only for internal
@@ -177,7 +183,21 @@ strongly supports a clinical read. Examples include GCS components such as
 as `STEC`, `WM`, `EBER`, `HAMN`, `GNAS`, `ROIs`, `JC`, and clinical exposure
 phrases such as `10 days drive`. Long genomic coordinate ranges are preserved
 only when bounded cytogenetic or molecular context supports that read, such as
-CGH array, FISH, chromosome, deletion, breakpoint, or base-pair wording.
+CGH array, FISH, chromosome, `chr` coordinates, genomic alterations, deletion,
+breakpoint, or base-pair wording. If pyDeid emits overlapping time, SIN, or
+phone-like spans inside such genomic coordinate tokens, ProjectPHI drops those
+overlapping spans before reconstruction instead of failing the row.
+Additional context-bound eponyms and report fragments are preserved only when
+nearby wording supports a clinical/report reading, such as `Lauren` in gastric
+pathology classification, `FUHRMAN` in nuclear-grade context, `ASMA` in
+anti-smooth-muscle antibody context, `URA` only as a standalone
+upper-renal-artery abbreviation, or OCR/template fragments such as `IMM`, `AXT`, `KER`,
+`MAK`, `LYM`, `FS`, `Coll`, and `Grou` in bounded pathology report fields.
+Pathology report
+headers such as `MICROSCOPIC`, `ADDENDUM`, `Specimen`, `Margins`, `FINAL`, and
+`Tumor` are preserved only with nearby report-template cues. Ordinary words
+such as `Comment`, `History`, and `margin` require the same bounded pathology
+or report context.
 
 ProjectPHI separately preserves selected ordinary clinical prose when pyDeid
 emits it as a `NAME` span in strong local context, such as `Blood` in `Blood
@@ -188,10 +208,13 @@ bounded terms such as `follow-up`, `homecare`, `low-income`,
 or care-context text when pyDeid emits them as spans. It also preserves
 selected vendor or reference metadata such as `Varian`, `Caris`, `Promega`,
 `Dako`, `Webster`, `Johnson`, `VITEK`, `SOFIA`, `Agilent`, `Kerr`, `Zeiss`,
-`Vysis`, and `Vinci` only when nearby product, assay, manufacturer, or device
-context supports that read. Highly name-like vendor tokens such as `Smith` and
-`Ramsey` require product-specific cues rather than generic device or wound-care
-wording.
+`Vysis`, `Vinci`, `Stryker`, `Zimmer`, `Somanetics`, `Mayfield`, `Bayer`,
+`Tomey`, `Abbott`, `Roche`, and `Siemens` only when nearby product, assay,
+manufacturer, or device context supports that read. Additional source/device
+tokens such as `Philips`
+are handled the same way. Highly name-like vendor tokens such as `Smith`,
+`Ramsey`, and `Mayfield` require product-specific cues rather than generic
+device or wound-care wording.
 Geography is not preserved by this rule; city/country names remain pyDeid
 fallback unless another explicit project rule applies.
 
