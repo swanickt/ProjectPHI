@@ -1080,14 +1080,56 @@ def test_stable_date_shift_requires_date_detection_when_types_are_provided():
             types=["mrn"],
         )
 
-def test_stable_date_shift_overlap_failure_is_sanitized():
-    note = "Synthetic overlap 2001-12-10."
-    raw_span_text = "2001-12-10"
+def test_stable_date_shift_prunes_recoverable_overlap_with_sanitized_warning():
+    note = "Synthetic overlap March 14, 2026."
+    raw_span_text = "March 14, 2026"
+    start = note.index(raw_span_text)
     spans = [
         PHISpan(
-            start=18,
-            end=28,
+            start=start,
+            end=start + len(raw_span_text),
             text=raw_span_text,
+            label="DATE",
+            source="pyDeid",
+            replacement="March 15, 2026",
+            pydeid_types=["Date"],
+            metadata={},
+        ),
+        PHISpan(
+            start=start + 2,
+            end=start + len(raw_span_text),
+            text="rch 14, 2026",
+            label="DATE",
+            source="pyDeid",
+            replacement="March 15, 2026",
+            pydeid_types=["Date"],
+            metadata={},
+        ),
+    ]
+
+    text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        spans,
+        date_shift_offset=1,
+        date_shift_days=45,
+    )
+
+    warning_text = " ".join(warnings)
+    assert text == "Synthetic overlap March 15, 2026."
+    assert len(final_spans) == 1
+    assert final_spans[0].text == raw_span_text
+    assert "Overlapping pyDeid span dropped during reconstruction." in warnings
+    assert raw_span_text not in warning_text
+    assert note not in warning_text
+
+
+def test_stable_date_shift_unresolved_overlap_still_fails_safely():
+    note = "Synthetic mixed overlap 2001-12-10."
+    spans = [
+        PHISpan(
+            start=24,
+            end=34,
+            text="2001-12-10",
             label="DATE",
             source="pyDeid",
             replacement="2001-12-11",
@@ -1095,13 +1137,13 @@ def test_stable_date_shift_overlap_failure_is_sanitized():
             metadata={},
         ),
         PHISpan(
-            start=20,
-            end=28,
-            text="01-12-10",
-            label="DATE",
+            start=26,
+            end=36,
+            text="01-12-10.",
+            label="NAME",
             source="pyDeid",
-            replacement="2001-12-11",
-            pydeid_types=["Date"],
+            replacement="Carter",
+            pydeid_types=["Last Name (un)"],
             metadata={},
         ),
     ]
@@ -1116,8 +1158,38 @@ def test_stable_date_shift_overlap_failure_is_sanitized():
 
     message = str(exc_info.value)
     assert "Overlapping pyDeid spans" in message
-    assert raw_span_text not in message
     assert note not in message
+
+
+def test_stable_date_shift_shifts_day_month_year_dates_with_optional_comma():
+    note = "The patient was admitted on 15 August, 2003."
+    raw_date = "15 August, 2003"
+    spans = [
+        PHISpan(
+            start=note.index(raw_date),
+            end=note.index(raw_date) + len(raw_date),
+            text=raw_date,
+            label="DATE",
+            source="pyDeid",
+            replacement="2011-08-03",
+            pydeid_types=["Day Month Year (2) [dd of Month, yy(yy)]"],
+            metadata={},
+        )
+    ]
+
+    text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        spans,
+        date_shift_offset=1,
+        date_shift_days=45,
+    )
+
+    assert text == "The patient was admitted on 16 August 2003."
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "project_stable_date_shift"
+    assert final_spans[0].metadata["project_date_shift_policy"] == (
+        "shifted_day_month_year_natural_language_full_date"
+    )
 
 def test_stable_date_shift_unparseable_date_placeholder_warning_is_sanitized():
     note = "Approximate date Spring."

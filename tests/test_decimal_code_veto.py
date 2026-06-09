@@ -72,6 +72,67 @@ def test_reconstruction_still_replaces_dotted_phone_numbers():
     assert "project_decimal_code_policy" not in final_spans[0].metadata
 
 
+def test_reconstruction_preserves_long_float_measurement_fragment():
+    note = "Tumour Size (cm). 6.2000000000000002. Histology showed carcinoma."
+    spans = [_contact_span("2000000000000002", note)]
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "project_decimal_code_veto"
+    assert final_spans[0].metadata["project_decimal_code_context"] == (
+        "long_float_measurement_context"
+    )
+
+
+def test_reconstruction_does_not_preserve_long_digit_contact_without_measurement_context():
+    note = "Call 2000000000000002 tomorrow."
+    spans = [_contact_span("2000000000000002", note)]
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert deidentified_text == "Call 416-555-1212 tomorrow."
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+    assert "project_decimal_code_policy" not in final_spans[0].metadata
+
+
+def test_reconstruction_does_not_preserve_long_float_fragment_from_embedded_mm_substring():
+    note = "Immunohistochemical testing listed artifact 6.2000000000000002."
+    spans = [_contact_span("2000000000000002", note)]
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert deidentified_text == (
+        "Immunohistochemical testing listed artifact 6.416-555-1212."
+    )
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+    assert "project_decimal_code_policy" not in final_spans[0].metadata
+
+
+def test_deidentify_note_runs_decimal_veto_when_builtin_protected_terms_are_disabled():
+    note = "Value was (189.1000043:4.002.001)."
+
+    result = deidentify_note(note, include_builtin_protected_clinical_terms=False)
+
+    assert result.deidentified_text == note
+    assert any(
+        span.metadata.get("replacement_source") == "project_decimal_code_veto"
+        for span in result.spans
+    )
+
+
 def test_deidentify_note_preserves_decimal_code_false_positive():
     note = "Value was (189.1000043:4.002.001)."
 
@@ -128,4 +189,3 @@ def test_deidentify_csv_audits_decimal_code_veto_without_raw_note_text(tmp_path)
         "preserved_decimal_like_code_fragment"
     )
     assert note not in audit_file.read_text(encoding="utf-8")
-

@@ -16,10 +16,11 @@ date intervals, unlike independent random replacement.
 The project shifts parseable full dates, including ISO-style dates and common
 English month-name dates in both month-day-year and day-month-year forms, only
 when pyDeid has already emitted a date span. Examples include
-`March 14, 2026` and `8 August 2019`. It also shifts pyDeid-detected
-month/year spans such as `March 2021` while preserving month/year granularity.
-Month/year shifting uses the same patient-specific day offset as full dates
-with an internal day-15 anchor, then outputs only `Month YYYY`.
+`March 14, 2026`, `8 August 2019`, and comma-separated day-month-year forms
+such as `15 August, 2003`. It also shifts pyDeid-detected month/year spans
+such as `March 2021` while preserving month/year granularity. Month/year
+shifting uses the same patient-specific day offset as full dates with an
+internal day-15 anchor, then outputs only `Month YYYY`.
 
 Month/day spans without a year, such as `July 15`, are shifted by default. The
 implementation uses an internal leap-year anchor for month rollover and outputs
@@ -46,7 +47,11 @@ pyDeid can mistake dotted numeric code fragments for phone numbers. ProjectPHI
 preserves pyDeid-emitted contact spans such as `189.1000043` when their dotted
 digit grouping is not phone-like, or when a colon/dotted continuation shows a
 larger code shape. Phone-like dotted contact text such as `416.555.1212`
-continues to be replaced.
+continues to be replaced. It also preserves long floating-point measurement
+fragments in strong measurement context, such as tumor-size values ending in a
+long decimal tail, so pyDeid does not turn them into phone-like surrogates.
+Short unit cues such as `cm` and `mm` are matched as bounded measurement tokens,
+not as substrings inside ordinary words.
 
 ## Clinical Abbreviation Semantics
 
@@ -151,7 +156,9 @@ The same approach is used for selected observed fragments such as `Paddick` in
 `von Willebrand factor`, `P.` in `P. insidiosum`, `GIA` in `Endo-GIA`, `M` in
 `Sof-lex/3 M ESPE`, `Jackson`/`Pratt` in `Jackson-Pratt`, `McFarland` in
 `0.5 McFarland`, `veno` in `veno-venous` or `veno-occlusive disease`, `hemi`
-in `hemi-abdomen` or `hemi-diaphragm`, and `dermo` in `dermo-hypodermal`.
+in `hemi-abdomen` or `hemi-diaphragm`, `Fuhrman` in `Fuhrman nuclear grade`,
+`Scarff` in `Scarff-Bloom-Richardson`, `Cormack`/`Lehane` in
+`Cormack-Lehane`, and `dermo` in `dermo-hypodermal`.
 
 Residual risk is explicit: a rare person, facility, or organization could share
 a protected clinical term. That tradeoff is accepted only for internal
@@ -168,7 +175,9 @@ phrases when pyDeid has already emitted them as spans and bounded context
 strongly supports a clinical read. Examples include GCS components such as
 `E2V2M5`, TNM stages such as `T3N0M0`, contextual biomedical abbreviations such
 as `STEC`, `WM`, `EBER`, `HAMN`, `GNAS`, `ROIs`, `JC`, and clinical exposure
-phrases such as `10 days drive`.
+phrases such as `10 days drive`. Long genomic coordinate ranges are preserved
+only when bounded cytogenetic or molecular context supports that read, such as
+CGH array, FISH, chromosome, deletion, breakpoint, or base-pair wording.
 
 ProjectPHI separately preserves selected ordinary clinical prose when pyDeid
 emits it as a `NAME` span in strong local context, such as `Blood` in `Blood
@@ -178,8 +187,11 @@ bounded terms such as `follow-up`, `homecare`, `low-income`,
 `diabetes mellitus`, and `do-not-resuscitate` are treated as low-risk clinical
 or care-context text when pyDeid emits them as spans. It also preserves
 selected vendor or reference metadata such as `Varian`, `Caris`, `Promega`,
-`Dako`, `Webster`, `Johnson`, `VITEK`, `SOFIA`, `Agilent`, and `Kerr` only
-when nearby product, assay, manufacturer, or device context supports that read.
+`Dako`, `Webster`, `Johnson`, `VITEK`, `SOFIA`, `Agilent`, `Kerr`, `Zeiss`,
+`Vysis`, and `Vinci` only when nearby product, assay, manufacturer, or device
+context supports that read. Highly name-like vendor tokens such as `Smith` and
+`Ramsey` require product-specific cues rather than generic device or wound-care
+wording.
 Geography is not preserved by this rule; city/country names remain pyDeid
 fallback unless another explicit project rule applies.
 

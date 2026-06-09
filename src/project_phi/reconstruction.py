@@ -44,7 +44,8 @@ Examples:
         "BI-RADS 2 was documented on February 2024."
 
 Safety:
-- overlapping spans fail closed with `ValueError`;
+- deterministic low-risk pyDeid span overlaps are pruned before reconstruction;
+- unresolved mixed overlaps still fail closed with `ValueError`;
 - raw original text is copied only outside detected spans;
 - replacement offsets are recorded in project-final coordinates.
 """
@@ -227,6 +228,8 @@ _DURATION_TRAVEL_RE = re.compile(
     r"(?:drive|flight|walk|hike|trip|travel)$",
     re.IGNORECASE,
 )
+_GENOMIC_COORDINATE_RANGE_RE = re.compile(r"^\d{6,}-\d{7,}$")
+_LONG_FLOAT_FRAGMENT_RE = re.compile(r"^\d{8,}$")
 
 _GCS_CONTEXT_TERMS = (
     "gcs",
@@ -247,6 +250,49 @@ _TNM_CONTEXT_TERMS = (
     "union for international cancer control",
 )
 
+_GENOMIC_COORDINATE_CONTEXT_TERMS = (
+    "amniocentesis",
+    "arr ",
+    "base pair",
+    "base pairs",
+    "breakpoint",
+    "breakpoints",
+    "cgh",
+    "chromosomal",
+    "chromosome",
+    "copy number",
+    "cytoband",
+    "deletion",
+    "duplication",
+    "fish",
+    "genomic",
+    "grch",
+    "hg19",
+    "hg38",
+    "karyotype",
+    "microarray",
+    "q22",
+    "q25",
+)
+
+_LONG_FLOAT_MEASUREMENT_CONTEXT_TERMS = (
+    "cm",
+    "diameter",
+    "dimension",
+    "dimensions",
+    "greatest dimension",
+    "length",
+    "lesion",
+    "mass",
+    "measurement",
+    "mm",
+    "size",
+    "thickness",
+    "tumor size",
+    "tumour size",
+    "width",
+)
+
 _CLINICAL_CODE_CONTEXT_RULES = {
     "STEC": ("infectious_disease_abbreviation", ("e. coli", "shiga", "stool", "toxin")),
     "WM": ("hematology_abbreviation", ("igm", "myd88", "waldenstrom", "macroglobulinemia")),
@@ -261,6 +307,8 @@ _CLINICAL_CODE_CONTEXT_RULES = {
     "DEL": ("karyotype_notation", ("karyotype", "chromosome", "chromosomal", "amniocentesis", "cnv")),
     "BROCK": ("procedure_eponym_fragment", ("brockenbrough", "transseptal", "needle")),
     "VO": ("neuroanatomy_abbreviation", ("ventral intermediate", "vim", "nuclei", "thalamotomy")),
+    "IOPA": ("dental_radiograph_abbreviation", ("radiograph", "radiographic", "intra-oral", "periapical")),
+    "CUN": ("acupuncture_measurement", ("acupuncture", "acupoint", "depth", "inserted", "needle", "needles")),
 }
 
 _ORDINARY_CLINICAL_PROSE_TERMS = {
@@ -309,18 +357,21 @@ _VENDOR_REFERENCE_CONTEXT_RULES = {
         "vendor_reference_metadata",
         ("johnson & johnson", "& johnson", "biosense webster", "ethicon", "prolene"),
     ),
-    "RAMSEY": ("vendor_reference_metadata", ("petmap", "blood pressure", "medical", "device")),
+    "RAMSEY": ("vendor_reference_metadata", ("petmap",)),
     "INGELHEIM": ("vendor_reference_metadata", ("boehringer", "vetmedin", "pimobendan")),
     "AMRHEIN": ("vendor_reference_metadata", ("boehringer", "ingelheim", "vetmedin")),
     "ZAMBON": ("vendor_reference_metadata", ("flagyl", "metronidazole", "antibiotic")),
     "STRECK": ("vendor_reference_metadata", ("dna bct", "cfdna", "blood collected", "tube")),
     "AGILENT": ("vendor_reference_metadata", ("bioanalyzer", "dna chips", "cfdna", "sequencing")),
     "SOFIA": ("vendor_reference_metadata", ("catheter", "microvention", "terumo", "intracranial")),
-    "SMITH": ("vendor_reference_metadata", ("nephew", "renasis", "vac", "negative pressure wound therapy")),
+    "SMITH": ("vendor_reference_metadata", ("smith & nephew", "smith and nephew", "renasys", "pico")),
     "SAPIEN": ("vendor_reference_metadata", ("edwards", "valve", "tavr")),
     "MERA": ("vendor_reference_metadata", ("sacuum", "suction", "senko", "drainage")),
     "KERR": ("vendor_reference_metadata", ("herculite", "premise", "dental", "composite", "restoration")),
     "KULZER": ("vendor_reference_metadata", ("tool kit", "polishing", "restoration", "dental")),
+    "ZEISS": ("vendor_reference_metadata", ("axioplan", "microscope", "fluorescent", "fish", "cohu-ccd")),
+    "VYSIS": ("vendor_reference_metadata", ("fish", "probe", "probes", "protocol", "hybridization")),
+    "VINCI": ("vendor_reference_metadata", ("da vinci", "robot", "robotic", "surgical system", "intuitive surgical")),
 }
 
 
@@ -396,8 +447,9 @@ def _reconstruct_with_project_replacements(
         - `warnings`: sanitized reconstruction warnings.
 
     Raises:
-        ValueError: If pyDeid spans overlap, because reconstruction cannot safely
-            decide which original text to copy or replace.
+        ValueError: If pyDeid spans have an unresolved mixed overlap, because
+            reconstruction cannot safely decide which original text to copy or
+            replace.
 
     Example:
         Original text:
@@ -415,7 +467,8 @@ def _reconstruct_with_project_replacements(
     warnings: list[str] = []
     cursor = 0
     final_offset = 0
-    sorted_spans = sorted(spans, key=lambda item: (item.start, item.end))
+    sorted_spans, overlap_warnings = _prune_resolvable_overlapping_spans(spans)
+    warnings.extend(overlap_warnings)
 
     for span in sorted_spans:
         if span.start < cursor:
@@ -482,6 +535,54 @@ def _reconstruct_with_project_replacements(
     trailing_text = original_text[cursor:]
     final_parts.append(trailing_text)
     return "".join(final_parts), final_spans, warnings
+
+
+def _prune_resolvable_overlapping_spans(
+    spans: list[PHISpan],
+) -> tuple[list[PHISpan], list[str]]:
+    """Prune deterministic low-risk overlaps before reconstruction.
+
+    pyDeid can occasionally emit nested or same-source/same-label overlapping
+    spans. Reconstruction can safely proceed when one span is clearly the better
+    replacement range. Mixed unresolved overlaps still fail closed downstream.
+    """
+    accepted: list[PHISpan] = []
+    warnings: list[str] = []
+    for candidate in sorted(spans, key=lambda item: (item.start, item.end)):
+        current: PHISpan | None = candidate
+        while current is not None and accepted and current.start < accepted[-1].end:
+            previous = accepted[-1]
+            winner = _preferred_overlap_span(previous, current)
+            if winner is previous:
+                warnings.append("Overlapping pyDeid span dropped during reconstruction.")
+                current = None
+                break
+            if winner is current:
+                warnings.append("Overlapping pyDeid span dropped during reconstruction.")
+                accepted.pop()
+                continue
+            return sorted(spans, key=lambda item: (item.start, item.end)), warnings
+        if current is not None:
+            accepted.append(current)
+    return accepted, warnings
+
+
+def _preferred_overlap_span(
+    left: PHISpan,
+    right: PHISpan,
+) -> PHISpan | None:
+    """Return the safer span to keep for a resolvable two-span overlap."""
+    if left.start <= right.start and right.end <= left.end:
+        return left
+    if right.start <= left.start and left.end <= right.end:
+        return right
+    if left.label == right.label and left.source == right.source:
+        left_len = left.end - left.start
+        right_len = right.end - right.start
+        if left_len != right_len:
+            return left if left_len > right_len else right
+        return left if (left.start, left.end) <= (right.start, right.end) else right
+    return None
 
 
 def _project_replacement_for_span(
@@ -828,6 +929,16 @@ def _clinical_code_veto_metadata(
             "project_clinical_code_context": "duration_or_exposure_phrase",
         }
 
+    if _GENOMIC_COORDINATE_RANGE_RE.match(token) and _context_contains(
+        broad_context,
+        _GENOMIC_COORDINATE_CONTEXT_TERMS,
+    ):
+        return {
+            "project_clinical_code_policy": "preserved_contextual_clinical_code",
+            "project_clinical_code": token,
+            "project_clinical_code_context": "genomic_coordinate_range",
+        }
+
     normalized = re.sub(r"[^A-Za-z0-9]+", "", token).upper()
     rule = _CLINICAL_CODE_CONTEXT_RULES.get(normalized)
     if rule is not None:
@@ -930,6 +1041,12 @@ def _decimal_code_contact_veto_metadata(
     if "telephone/fax" not in " ".join(span.pydeid_types or []).casefold():
         return None
 
+    if _is_long_float_measurement_fragment(span, original_text):
+        return {
+            "project_decimal_code_policy": "preserved_decimal_like_code_fragment",
+            "project_decimal_code_context": "long_float_measurement_context",
+        }
+
     span_digits = _dotted_numeric_groups(span.text)
     if span_digits is None:
         return None
@@ -972,6 +1089,40 @@ def _has_dotted_numeric_colon_continuation(
     """Return true when a dotted span is followed by colon+dotted numeric text."""
     after = original_text[span.end : min(len(original_text), span.end + 32)]
     return re.match(r"^\s*:\s*\d+(?:\.\d+)+", after) is not None
+
+
+def _is_long_float_measurement_fragment(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true for long decimal fragments in measurement context."""
+    token = span.text.strip(" \t\r\n()[]{}")
+    context = _span_context(original_text, span.start, span.end, window=120).casefold()
+    if not _has_long_float_measurement_context(context):
+        return False
+
+    if re.fullmatch(r"\d+\.\d{8,}", token):
+        return True
+
+    if not _LONG_FLOAT_FRAGMENT_RE.fullmatch(token):
+        return False
+
+    before = original_text[max(0, span.start - 3) : span.start]
+    after = original_text[span.end : min(len(original_text), span.end + 3)]
+    return (
+        bool(re.search(r"\d\.$", before))
+        or bool(re.match(r"^\.\d", after))
+    )
+
+
+def _has_long_float_measurement_context(context: str) -> bool:
+    """Return true for measurement cues without matching `cm`/`mm` inside words."""
+    if _context_contains(
+        context,
+        tuple(term for term in _LONG_FLOAT_MEASUREMENT_CONTEXT_TERMS if term not in {"cm", "mm"}),
+    ):
+        return True
+    return re.search(r"(?<![a-z0-9])(?:cm|mm)(?![a-z0-9])", context) is not None
 
 
 def _clinical_abbreviation_veto_metadata(

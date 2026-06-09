@@ -35,6 +35,8 @@ from .protected_terms import _build_protected_terms_profile
 from .pydeid_client import DEFAULT_PYDEID_TYPES, run_pydeid_deid_string
 from .reconstruction import _reconstruct_with_project_replacements
 
+_PROJECT_SPAN_LOCAL_SEMANTIC_VETOES_ENABLED = True
+
 
 def deidentify_note(
     note_text: str,  # Original single-note text to send to pyDeid.
@@ -227,6 +229,7 @@ def deidentify_note(
         or stable_patient_name_surrogates
         or stable_provider_name_surrogates
         or protected_terms_profile is not None
+        or _PROJECT_SPAN_LOCAL_SEMANTIC_VETOES_ENABLED
     ):
         deidentified_text, spans, reconstruction_warnings = _reconstruct_with_project_replacements(
             note_text,

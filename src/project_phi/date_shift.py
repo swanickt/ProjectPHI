@@ -62,7 +62,7 @@ _NATURAL_LANGUAGE_FULL_DATE_RE = re.compile(
     re.IGNORECASE,
 )
 _DAY_MONTH_YEAR_FULL_DATE_RE = re.compile(
-    r"^\s*([0-9]{1,2})\s+([A-Za-z]{3,9})\.?\s+([0-9]{4})\s*$",
+    r"^\s*([0-9]{1,2})\s+([A-Za-z]{3,9})\.?,?\s+([0-9]{4})\s*$",
     re.IGNORECASE,
 )
 _NATURAL_LANGUAGE_MONTH_YEAR_RE = re.compile(

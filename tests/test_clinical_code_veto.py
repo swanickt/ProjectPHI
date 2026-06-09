@@ -94,6 +94,10 @@ def test_reconstruction_preserves_contextual_biomedical_abbreviations():
         ("The fetal chromosome karyotype was 46, XY, del (18).", "del"),
         ("A standard Brockenbrough needle was used for transseptal access.", "Brock"),
         ("Bilateral lesions covered the Vo and ventral intermediate nuclei.", "Vo"),
+        (
+            "CGH array showed arr 1q22q25.1 (154559773-171639287,) X1.",
+            "559773-171639287",
+        ),
     ]
 
     for note, token in examples:
@@ -160,6 +164,19 @@ def test_reconstruction_does_not_preserve_ordinary_clinical_word_without_context
     assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
+def test_reconstruction_does_not_preserve_long_numeric_range_without_genomic_context():
+    note = "The patient had identifier 559773-171639287 in the source system."
+
+    text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [_span(note, "559773-171639287", label="ID", replacement="844-415-6485")],
+    )
+
+    assert text == "The patient had identifier 844-415-6485 in the source system."
+    assert warnings == []
+    assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
 def test_reconstruction_preserves_vendor_reference_metadata_without_geography():
     examples = [
         ("Treatment used TrueBeam by Varian Medical Systems.", "Varian"),
@@ -186,6 +203,11 @@ def test_reconstruction_preserves_vendor_reference_metadata_without_geography():
         ("Drainage used the MERA Sacuum suction unit.", "MERA"),
         ("Direct dental composite restorations used Herculite Kerr.", "Kerr"),
         ("Rigorous polishing used a Kulzer tool kit.", "Kulzer"),
+        ("The Smith & Nephew RENASYS system was used.", "Smith"),
+        ("Monitoring used the PetMAP Ramsey system.", "Ramsey"),
+        ("FISH signals were analyzed with a Zeiss Axioplan microscope.", "Zeiss"),
+        ("FISH used a modified Vysis protocol.", "Vysis"),
+        ("The da Vinci Surgical System was used for robotic surgery.", "Vinci"),
     ]
 
     for note, token in examples:
@@ -200,6 +222,25 @@ def test_reconstruction_preserves_vendor_reference_metadata_without_geography():
         assert spans[0].metadata["project_clinical_code_policy"] == (
             "preserved_vendor_reference_metadata"
         )
+
+
+def test_reconstruction_preserves_cun_only_in_acupuncture_measurement_context():
+    note = "The needles were inserted to a depth of 0.2 cun."
+
+    text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [_span(note, "cun", label="NAME", replacement="Carter")],
+    )
+
+    assert text == note
+    assert warnings == []
+    assert spans[0].metadata["replacement_source"] == "project_clinical_code_veto"
+    assert spans[0].metadata["project_clinical_code_policy"] == (
+        "preserved_contextual_clinical_code"
+    )
+    assert spans[0].metadata["project_clinical_code_context"] == (
+        "acupuncture_measurement"
+    )
 
 
 def test_reconstruction_does_not_preserve_vendor_geography_name():
@@ -217,16 +258,33 @@ def test_reconstruction_does_not_preserve_vendor_geography_name():
 
 def test_reconstruction_does_not_preserve_vendor_like_person_names_without_context():
     examples = [
-        ("Webster attended the clinic visit.", "Webster"),
-        ("Johnson attended the clinic visit.", "Johnson"),
+        ("Webster attended the clinic visit.", "Webster", "Carter attended the clinic visit."),
+        ("Johnson attended the clinic visit.", "Johnson", "Carter attended the clinic visit."),
+        ("Smith attended the clinic visit.", "Smith", "Carter attended the clinic visit."),
+        ("Ramsey attended the clinic visit.", "Ramsey", "Carter attended the clinic visit."),
+        (
+            "Smith changed the wound VAC dressing.",
+            "Smith",
+            "Carter changed the wound VAC dressing.",
+        ),
+        (
+            "Ramsey checked the blood pressure device.",
+            "Ramsey",
+            "Carter checked the blood pressure device.",
+        ),
+        (
+            "The source system recorded cun as a label.",
+            "cun",
+            "The source system recorded Carter as a label.",
+        ),
     ]
 
-    for note, token in examples:
+    for note, token, expected_text in examples:
         text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
             note,
             [_span(note, token, label="NAME", replacement="Carter")],
         )
 
-        assert text == "Carter attended the clinic visit."
+        assert text == expected_text
         assert warnings == []
         assert spans[0].metadata["replacement_source"] == "pyDeid"

@@ -94,17 +94,19 @@ secrets or patient-specific config:
   enabled, full aliases can exact-match, while single-token aliases require
   provider-role context.
 - `include_builtin_protected_clinical_terms=True`: the small built-in protected
-  clinical term set is active by default.
+  clinical term set is active by default. Setting this to `False` disables only
+  that built-in protected-term list; other span-local semantic vetoes remain
+  active.
 - Narrow semantic-preservation vetoes such as clinical abbreviation,
   obstetric-history shorthand, ordinary-token, title-token-fragment, and
   title-context action-word rules are available during project reconstruction.
 
-Because built-in protected clinical terms are enabled by default, ProjectPHI
-may reconstruct final text from original-note offsets even when stable dates
-and stable name surrogate modes are off. In that default path, reconstruction
-still uses only pyDeid-emitted spans. Residual alias spans are created only
-when stable patient-name or stable provider-name surrogates are explicitly
-enabled with aliases.
+ProjectPHI may reconstruct final text from original-note offsets even when
+stable dates and stable name surrogate modes are off, because span-local
+semantic vetoes are active by default. In that default path, reconstruction
+still uses only pyDeid-emitted spans. Residual alias spans are created only when
+stable patient-name or stable provider-name surrogates are explicitly enabled
+with aliases.
 
 ## `types`
 

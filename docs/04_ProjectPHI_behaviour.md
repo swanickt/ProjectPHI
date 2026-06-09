@@ -59,13 +59,16 @@ text. Reconstruction is used for:
 - title-context action-word preservation.
 
 **Default configuration:** stable date shifting, stable patient-name
-surrogates, and stable provider-name surrogates are opt-in, but built-in
-protected clinical terms are enabled by default. As a result, reconstruction
-may run in the default pipeline for span-local semantic-preservation vetoes
-even when no stable replacement mode is enabled.
+surrogates, and stable provider-name surrogates are opt-in. Span-local
+semantic-preservation vetoes are available by default, so reconstruction may
+run even when no stable replacement mode is enabled. Disabling the built-in
+protected clinical term list disables only that list; it does not disable other
+span-local vetoes.
 
-Reconstruction fails closed on unexpected overlapping spans. Silently skipping
-an overlap could preserve raw text, so the code raises a sanitized error.
+Reconstruction prunes deterministic pyDeid overlaps, such as nested fragments
+or same-source/same-label conflicts where one span is clearly safer to keep.
+Unresolved mixed overlaps still fail closed with a sanitized error because
+silently skipping them could preserve raw text.
 
 Priority order during reconstruction:
 

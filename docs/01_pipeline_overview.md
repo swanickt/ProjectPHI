@@ -118,8 +118,9 @@ Reconstruction priority:
 12. title-context action-word veto;
 13. pyDeid replacement fallback.
 
-Reconstruction fails closed on unexpected overlapping spans rather than
-silently preserving raw text.
+Reconstruction prunes deterministic pyDeid overlaps such as nested same-range
+fragments before rebuilding text. Unresolved mixed overlaps still fail closed
+rather than silently preserving raw text.
 
 ## CSV, CLI, And Audit
 
