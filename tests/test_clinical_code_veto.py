@@ -181,6 +181,10 @@ def test_reconstruction_preserves_contextual_biomedical_abbreviations():
         ("A gastrointestinal anastomosis (GIA-75) stapler was fired.", "GIA"),
         ("The microRNA (miR) gene MIR4737 was expressed.", "miR"),
         ("LUM - left ureter margin was listed in the block map.", "LUM"),
+        ("Pseudoangiomatous stromal hyperplasia (PASH) was present in the breast biopsy.", "PASH"),
+        ("A DIEP flap was planned for breast reconstruction.", "DIEP"),
+        ("The deep inferior epigastric perforator (DIEP) flap was viable.", "DIEP"),
+        ("The Gugging Swallowing Screen (GUSS) suggested dysphagia.", "GUSS"),
         ("The upper renal artery (URA) was aneurysmal.", "URA"),
         ("Date Coll: specimen was collected in formalin.", "Coll"),
         ("COLL. TIME IN FORMALIN: 6:29 hrs.", "COLL"),
@@ -283,6 +287,24 @@ def test_reconstruction_does_not_preserve_ordinary_clinical_word_without_context
     assert text == "Carter attended the visit."
     assert warnings == []
     assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_does_not_preserve_new_short_abbreviations_without_context():
+    examples = [
+        ("PASH attended the visit.", "PASH"),
+        ("DIEP attended the visit.", "DIEP"),
+        ("GUSS attended the visit.", "GUSS"),
+    ]
+
+    for note, token in examples:
+        text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            [_span(note, token, label="NAME", replacement="Carter")],
+        )
+
+        assert text == note.replace(token, "Carter")
+        assert warnings == []
+        assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
 def test_reconstruction_does_not_preserve_long_numeric_range_without_genomic_context():
