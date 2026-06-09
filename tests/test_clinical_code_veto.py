@@ -132,6 +132,11 @@ def test_reconstruction_preserves_contextual_biomedical_abbreviations():
         ("Shiga-like toxin-producing E. coli (STEC) was found in stool.", "STEC"),
         ("The history of Waldenstrom macroglobulinemia (WM) was reviewed.", "WM"),
         ("The EBV-EBER stain was positive in neoplastic cells.", "EBER"),
+        ("Bevacizumab (BEV) was continued as maintenance chemotherapy.", "BEV"),
+        ("Desmin (DES Rabbit pAb) staining was performed.", "DES"),
+        ("TPC/TPD/TPF were negative after intraoperative touch prep.", "TPC"),
+        ("TPC/TPD/TPF were negative after intraoperative touch prep.", "TPD"),
+        ("TPC/TPD/TPF were negative after intraoperative touch prep.", "TPF"),
         ("The sample showed LAMN/HAMN on pathology review.", "HAMN"),
         ("The mutation of GNAS c.602G>A was reported.", "GNAS"),
         ("Ten round ROIs were drawn on the axial image.", "ROIs"),
@@ -147,6 +152,7 @@ def test_reconstruction_preserves_contextual_biomedical_abbreviations():
         ("Allred proportion score was recorded for ER expression.", "Allred"),
         ("Typus intestinalis sec. Lauren was noted in the gastric tumor.", "Lauren"),
         ("Histologic type by Lauren was diffuse.", "Lauren"),
+        ("The tumor was mixed type acc. to Lauren class.", "Lauren"),
         ("The patient underwent hemicolectomy.", "hemi"),
         ("The procedure was hemithyroidectomy.", "hemi"),
         ("The patient underwent left hemi-colectomy.", "hemi"),
@@ -322,6 +328,8 @@ def test_reconstruction_preserves_vendor_reference_metadata_without_geography():
         ("Monitoring used the PetMAP Ramsey system.", "Ramsey"),
         ("FISH signals were analyzed with a Zeiss Axioplan microscope.", "Zeiss"),
         ("FISH images were reviewed on a Carl Zeiss microscope.", "Zeiss"),
+        ("FISH images were reviewed on a Carl Zeiss microscope.", "Carl"),
+        ("Carl Zeiss Meditec OCT demonstrated retinal thinning.", "Carl"),
         ("FISH used a modified Vysis protocol.", "Vysis"),
         ("The da Vinci Surgical System was used for robotic surgery.", "Vinci"),
         ("A Stryker Trevo device was used for thrombectomy.", "Stryker"),
@@ -350,6 +358,9 @@ def test_reconstruction_preserves_vendor_reference_metadata_without_geography():
         ("Perclose Pro-Glide SMC from Abbott was deployed.", "Abbott"),
         ("The patient received atezolizumab from Hoffmann-La Roche AG.", "Roche"),
         ("Drontal Plus tablets from Bayer were prescribed.", "Bayer"),
+        ("SALSA MLPA P101-A2 STK11 kit was used.", "SALSA"),
+        ("A Guidant stent was deployed.", "Guidant"),
+        ("The Ethicon Prolene suture was placed.", "Ethicon"),
     ]
 
     for note, token in examples:
@@ -466,6 +477,41 @@ def test_reconstruction_does_not_preserve_vendor_like_person_names_without_conte
         (
             "Lauren attended the visit.",
             "Lauren",
+            "Carter attended the visit.",
+        ),
+        (
+            "BEV attended the visit.",
+            "BEV",
+            "Carter attended the visit.",
+        ),
+        (
+            "DES attended the visit.",
+            "DES",
+            "Carter attended the visit.",
+        ),
+        (
+            "TPC attended the visit.",
+            "TPC",
+            "Carter attended the visit.",
+        ),
+        (
+            "Carl attended the visit.",
+            "Carl",
+            "Carter attended the visit.",
+        ),
+        (
+            "SALSA attended the visit.",
+            "SALSA",
+            "Carter attended the visit.",
+        ),
+        (
+            "Guidant attended the visit.",
+            "Guidant",
+            "Carter attended the visit.",
+        ),
+        (
+            "Ethicon attended the visit.",
+            "Ethicon",
             "Carter attended the visit.",
         ),
         (
