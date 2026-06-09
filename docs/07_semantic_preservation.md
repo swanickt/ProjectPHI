@@ -157,14 +157,16 @@ The same approach is used for selected observed fragments such as `Paddick` in
 `Sof-lex/3 M ESPE`, `Jackson`/`Pratt` in `Jackson-Pratt`, `McFarland` in
 `0.5 McFarland`, `au` in `cafe-au-lait`, `veno` in `veno-venous` or
 `veno-occlusive disease`, `hemi` in `hemi-abdomen`, `hemi-diaphragm`,
-`hemi-thorax`, `hemi-trigone`, or `hemi-CRVO`, `Fuhrman` in
-`Fuhrman nuclear grade`, `Allred` in Allred scoring terms, `Scarff` in
+`hemi-thorax`, `hemi-trigone`, `hemi-CRVO`, `hemi-abdominal`,
+`hemi-space`, or `hemi-liver`, `Fuhrman` in `Fuhrman nuclear grade`,
+`Allred` in Allred scoring terms, `Scarff` in
 `Scarff-Bloom-Richardson`,
 `Cormack`/`Lehane` in `Cormack-Lehane`, and `dermo` in
 `dermo-hypodermal`. Additional guarded eponym/fragment examples include
 `Ishak` in fibrosis staging, `Grocott` in stain contexts, `Hertel` in
 exophthalmometry contexts, `Naranjo` in adverse-drug-reaction probability
-scale contexts, and `de`/`sac` only in bounded `cul-de-sac` phrases.
+scale contexts including algorithm-score variants, and `de`/`sac` only in
+bounded `cul-de-sac` phrases.
 
 Residual risk is explicit: a rare person, facility, or organization could share
 a protected clinical term. That tradeoff is accepted only for internal
@@ -191,13 +193,14 @@ Additional context-bound eponyms and report fragments are preserved only when
 nearby wording supports a clinical/report reading, such as `Lauren` in gastric
 pathology classification, `FUHRMAN` in nuclear-grade context, `ASMA` in
 anti-smooth-muscle antibody context, `URA` only as a standalone
-upper-renal-artery abbreviation, or OCR/template fragments such as `IMM`, `AXT`, `KER`,
-`MAK`, `LYM`, `FS`, `Coll`, and `Grou` in bounded pathology report fields.
-Pathology report
+upper-renal-artery abbreviation, `GIA` in stapler/anastomosis context, `miR`
+in microRNA context, `LUM` in left-ureter-margin context, or OCR/template
+fragments such as `IMM`, `AXT`, `KER`, `MAK`, `LYM`, `HEE`, `FS`, `FSA`-`FSD`,
+`Coll`, and `Grou` in bounded pathology report fields. Pathology report
 headers such as `MICROSCOPIC`, `ADDENDUM`, `Specimen`, `Margins`, `FINAL`, and
 `Tumor` are preserved only with nearby report-template cues. Ordinary words
-such as `Comment`, `History`, and `margin` require the same bounded pathology
-or report context.
+such as `Comment`, `History`, `paraffin`, and `margin` require the same bounded
+pathology or report context.
 
 ProjectPHI separately preserves selected ordinary clinical prose when pyDeid
 emits it as a `NAME` span in strong local context, such as `Blood` in `Blood

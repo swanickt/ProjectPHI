@@ -169,7 +169,12 @@ def test_reconstruction_preserves_contextual_biomedical_abbreviations():
         ("Cytokeratin Cocktail (KER) was ordered.", "KER"),
         ("MAK-6, EMA, and Desmin were negative.", "MAK"),
         ("The lymphocyte count included LYM% of 5.20%.", "LYM"),
+        ("Additional HEE-stained sections were reviewed.", "HEE"),
         ("Frozen Section Pathologist reviewed FS B1.", "FS"),
+        ("Dr. FSC/FSD: metastatic carcinoma was reported after frozen section.", "FSC"),
+        ("A gastrointestinal anastomosis (GIA-75) stapler was fired.", "GIA"),
+        ("The microRNA (miR) gene MIR4737 was expressed.", "miR"),
+        ("LUM - left ureter margin was listed in the block map.", "LUM"),
         ("The upper renal artery (URA) was aneurysmal.", "URA"),
         ("Date Coll: specimen was collected in formalin.", "Coll"),
         ("COLL. TIME IN FORMALIN: 6:29 hrs.", "COLL"),
@@ -244,6 +249,9 @@ def test_reconstruction_preserves_ordinary_clinical_prose():
         ("Results were reported to the Physician of Record.", "Record.", "medical_record_prose"),
         ("At follow-up, her mRS score was 4.", "score", "clinical_score_prose"),
         ("The NIHSS score was 21.", "score", "clinical_score_prose"),
+        ("The MGMT assay was performed on paraffin block.", "paraffin", "pathology_report_header_prose"),
+        ("Tumor obtained for cancer genomics study.", "Tumor", "pathology_report_header_prose"),
+        ("Microscopic vascular invasion identified.", "Microscopic", "pathology_report_header_prose"),
     ]
 
     for note, token, context_name in examples:
@@ -412,6 +420,26 @@ def test_reconstruction_does_not_preserve_ura_inside_larger_word():
     assert text == "The dCarterble implant was documented after renal imaging."
     assert warnings == []
     assert spans[0].metadata["replacement_source"] == "pyDeid"
+
+
+def test_reconstruction_does_not_preserve_short_pathology_fragments_without_context():
+    examples = [
+        ("GIA attended the visit.", "GIA", "Carter attended the visit."),
+        ("miR attended the visit.", "miR", "Carter attended the visit."),
+        ("LUM attended the visit.", "LUM", "Carter attended the visit."),
+        ("FSC attended the visit.", "FSC", "Carter attended the visit."),
+        ("HEE attended the visit.", "HEE", "Carter attended the visit."),
+    ]
+
+    for note, token, expected in examples:
+        text, spans, warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            [_span(note, token, label="NAME", replacement="Carter")],
+        )
+
+        assert text == expected
+        assert warnings == []
+        assert spans[0].metadata["replacement_source"] == "pyDeid"
 
 
 def test_reconstruction_does_not_preserve_vendor_like_person_names_without_context():
