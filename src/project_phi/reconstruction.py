@@ -230,6 +230,10 @@ _DURATION_TRAVEL_RE = re.compile(
 )
 _GENOMIC_COORDINATE_RANGE_RE = re.compile(r"^\d{6,}-\d{7,}$")
 _LONG_FLOAT_FRAGMENT_RE = re.compile(r"^\d{8,}$")
+_UUID_LIKE_SOURCE_ID_PREFIX_RE = re.compile(
+    r"(?:^|[^A-Za-z0-9_])"
+    r"[A-Fa-f0-9]{4,}-[A-Fa-f0-9]{4,}-[A-Fa-f0-9]{4,}-[A-Fa-f0-9]{2,}-$"
+)
 
 _GCS_CONTEXT_TERMS = (
     "gcs",
@@ -1033,6 +1037,16 @@ def _clinical_code_veto_metadata(
             "project_clinical_code_context": "genomic_coordinate_token",
         }
 
+    if span.label in {"CONTACT", "ID"} and _is_numeric_tail_of_uuid_like_source_id(
+        span,
+        original_text,
+    ):
+        return {
+            "project_clinical_code_policy": "preserved_contextual_clinical_code",
+            "project_clinical_code": token,
+            "project_clinical_code_context": "uuid_like_source_identifier",
+        }
+
     if span.label not in {"NAME", "LOCATION", "HOSPITAL", "ID", "PHI"}:
         return None
 
@@ -1268,6 +1282,25 @@ def _has_long_float_measurement_context(context: str) -> bool:
     ):
         return True
     return re.search(r"(?<![a-z0-9])(?:cm|mm)(?![a-z0-9])", context) is not None
+
+
+def _is_numeric_tail_of_uuid_like_source_id(
+    span: PHISpan,
+    original_text: str,
+) -> bool:
+    """Return true when a phone-like span is the numeric tail of a source ID."""
+    token = span.text.strip()
+    if not re.fullmatch(r"\d{11,}", token):
+        return False
+    if "telephone/fax" not in " ".join(span.pydeid_types or []).casefold():
+        return False
+
+    before = original_text[max(0, span.start - 80) : span.start]
+    if _UUID_LIKE_SOURCE_ID_PREFIX_RE.search(before) is None:
+        return False
+
+    after = original_text[span.end : min(len(original_text), span.end + 1)]
+    return not after or not (after[0].isalnum() or after[0] == "_")
 
 
 def _clinical_abbreviation_veto_metadata(

@@ -104,6 +104,62 @@ def test_reconstruction_does_not_preserve_long_digit_contact_without_measurement
     assert "project_decimal_code_policy" not in final_spans[0].metadata
 
 
+def test_reconstruction_preserves_uuid_like_source_id_numeric_tail():
+    note = (
+        "Source artifact ):5849C91E-F4BB-4AA7-BE64-837168189379. "
+        "FINAL PATHOLOGIC DIAGNOSIS."
+    )
+    spans = [_contact_span("837168189379", note)]
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert deidentified_text == note
+    assert warnings == []
+    assert final_spans[0].action == "preserved"
+    assert final_spans[0].metadata["replacement_source"] == "project_clinical_code_veto"
+    assert final_spans[0].metadata["project_clinical_code_policy"] == (
+        "preserved_contextual_clinical_code"
+    )
+    assert final_spans[0].metadata["project_clinical_code_context"] == (
+        "uuid_like_source_identifier"
+    )
+
+
+def test_reconstruction_does_not_preserve_long_contact_without_uuid_like_prefix():
+    note = "Source artifact BE64-837168189379. FINAL PATHOLOGIC DIAGNOSIS."
+    spans = [_contact_span("837168189379", note)]
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert deidentified_text == (
+        "Source artifact BE64-416-555-1212. FINAL PATHOLOGIC DIAGNOSIS."
+    )
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+    assert "project_clinical_code_policy" not in final_spans[0].metadata
+
+
+def test_reconstruction_does_not_preserve_phone_shaped_contact_in_uuid_like_context():
+    note = "Source artifact ):5849C91E-F4BB-4AA7-BE64-4165551212."
+    spans = [_contact_span("4165551212", note)]
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        spans,
+    )
+
+    assert deidentified_text == "Source artifact ):5849C91E-F4BB-4AA7-BE64-416-555-1212."
+    assert warnings == []
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+    assert "project_clinical_code_policy" not in final_spans[0].metadata
+
+
 def test_reconstruction_does_not_preserve_long_float_fragment_from_embedded_mm_substring():
     note = "Immunohistochemical testing listed artifact 6.2000000000000002."
     spans = [_contact_span("2000000000000002", note)]
