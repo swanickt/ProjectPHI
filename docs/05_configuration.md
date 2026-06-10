@@ -93,13 +93,14 @@ secrets or patient-specific config:
   off unless explicitly enabled with provider aliases and a secret. When
   enabled, full aliases can exact-match, while single-token aliases require
   provider-role context.
-- `include_builtin_protected_clinical_terms=True`: the small built-in protected
-  clinical term set is active by default. Setting this to `False` disables only
-  that built-in protected-term list; other span-local semantic vetoes remain
-  active.
-- Narrow semantic-preservation vetoes such as clinical abbreviation,
-  obstetric-history shorthand, ordinary-token, title-token-fragment, and
-  title-context action-word rules are available during project reconstruction.
+- `include_builtin_protected_clinical_terms=True`: the curated built-in
+  protected clinical term set is active by default. Setting this to `False`
+  disables only that built-in protected-term list; other span-local semantic
+  vetoes remain active.
+- Other narrow semantic-preservation vetoes include clinical abbreviations,
+  obstetric-history shorthand, decimal/code fragments, ordinary clinical prose,
+  vendor/reference metadata, ordinary tokens, title-token fragments, and
+  title-context action words.
 
 ProjectPHI may reconstruct final text from original-note offsets even when
 stable dates and stable name surrogate modes are off, because span-local

@@ -25,10 +25,13 @@ Replacement priority:
 5. Apply stable patient-name aliases when patient alias replacement is enabled.
 6. Apply stable provider-name aliases when provider alias replacement is enabled,
    including narrow adjacent action-word rescue after explicit provider aliases.
-7. Preserve narrow ordinary-token false positives such as articles/pronouns.
-8. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
-9. Preserve narrow title-context action-word false positives.
-10. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
+7. Preserve decimal-like contact false positives.
+8. Preserve compact clinical codes and context-bound biomedical/report fragments.
+9. Preserve ordinary clinical prose and non-geographic vendor/reference metadata.
+10. Preserve narrow ordinary-token false positives such as articles/pronouns.
+11. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
+12. Preserve narrow title-context action-word false positives.
+13. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
 
 Examples:
     Original:
@@ -588,7 +591,10 @@ def _reconstruct_with_project_replacements(
                 "project_replacement_end": replacement_end,
             }
         )
-        if date_shift_offset is not None:
+        if date_shift_offset is not None and _should_record_date_shift_metadata(
+            replacement_source,
+            policy,
+        ):
             metadata["project_date_shift_range_days"] = date_shift_days
             metadata["project_date_shift_policy"] = policy
         if replacement_source == "project_stable_date_shift" and date_shift_offset is not None:
@@ -663,6 +669,18 @@ _GENOMIC_COORDINATE_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 
+_DATE_SHIFT_AUDIT_POLICIES = {
+    "preserved_holiday_or_season",
+    "preserved_score_or_fraction",
+    "preserved_time",
+    "preserved_year_only",
+    "shifted_full_date",
+    "shifted_month_year",
+    "shifted_natural_language_full_date",
+    "shifted_partial_month_day",
+    "unparseable_date_placeholder",
+}
+
 
 def _span_inside_genomic_coordinate_token(
     span: PHISpan,
@@ -685,6 +703,17 @@ def _span_inside_genomic_coordinate_token(
         if start <= span.start and span.end <= end:
             return True
     return False
+
+
+def _should_record_date_shift_metadata(
+    replacement_source: str,
+    policy: str,
+) -> bool:
+    """Return true when date audit fields describe this span."""
+    return (
+        replacement_source == "project_stable_date_shift"
+        or policy in _DATE_SHIFT_AUDIT_POLICIES
+    )
 
 
 def _spans_overlap(
@@ -758,21 +787,33 @@ def _project_replacement_for_span(
        lower-case action-word span immediately after an explicit provider alias
        can be preserved when following context supports a clinical verb read.
 
-    7. Ordinary-token veto:
+    7. Decimal-like contact veto:
+       preserve non-phone dotted numeric code or measurement fragments that
+       pyDeid emitted as contact spans.
+
+    8. Clinical-code and report-fragment veto:
+       preserve compact clinical codes, contextual biomedical abbreviations,
+       pathology-template fragments, and strongly bounded vendor/device terms.
+
+    9. Ordinary clinical prose veto:
+       preserve selected low-risk clinical wording and non-geographic
+       vendor/reference metadata in strong local context.
+
+    10. Ordinary-token veto:
        preserve selected articles, pronouns, and clinical shorthand that pyDeid
        emitted as very short name spans when context supports a non-name read.
 
-    8. Title-token-fragment veto:
+    11. Title-token-fragment veto:
        preserve non-identifying `Dr.` fragments when pyDeid split the title
        token itself into name spans in a strong title/name or role/title/name
        context.
 
-    9. Title-context action-word veto:
+    12. Title-context action-word veto:
        preserve narrow clinical action words that pyDeid emitted as
        title-derived name spans in `Dr.` contexts. Lower-case words use the
        base rule; capitalized words require following clinical-object context.
 
-    10. pyDeid fallback:
+    13. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
 
     Args:

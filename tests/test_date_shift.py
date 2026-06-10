@@ -1013,6 +1013,29 @@ def test_stable_date_shift_zero_range_keeps_full_date_and_records_metadata():
     assert date_span.metadata["project_date_shift_range_days"] == 0
     assert date_span.metadata["project_date_shift_policy"] == "shifted_full_date"
 
+
+def test_stable_date_shift_metadata_is_limited_to_date_like_spans():
+    note = "Test MRN: 011-0111. Follow-up on 2001-12-10."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-date-006b",
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+    )
+
+    date_span = next(span for span in result.spans if span.label == "DATE")
+    non_date_spans = [span for span in result.spans if span.label != "DATE"]
+
+    assert date_span.metadata["project_date_shift_policy"] == "shifted_full_date"
+    assert date_span.metadata["project_date_shift_range_days"] == 45
+    assert non_date_spans
+    for span in non_date_spans:
+        assert "project_date_shift_policy" not in span.metadata
+        assert "project_date_shift_range_days" not in span.metadata
+        assert "project_date_shift_days" not in span.metadata
+
+
 def test_stable_date_shift_secret_env_var_success(monkeypatch):
     note = "Follow-up on 2001-12-10."
     monkeypatch.setenv("PROJECT_PHI_TEST_DATE_SECRET", "synthetic-secret")

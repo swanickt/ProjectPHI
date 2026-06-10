@@ -27,6 +27,8 @@ note text
        - stable patient-name aliases
        - stable provider-name aliases
        - dotted decimal-like contact veto
+       - compact clinical-code and report-fragment veto
+       - ordinary clinical prose and non-geographic vendor/reference veto
        - ordinary-token veto
        - title-token-fragment veto
        - title-context action-word veto
@@ -90,7 +92,7 @@ editing pyDeid's already-replaced text, where project replacements may have
 different lengths and offset systems would become ambiguous.
 
 By default, stable dates, stable patient-name surrogates, and stable
-provider-name surrogates are off. The small built-in protected clinical term
+provider-name surrogates are off. The curated built-in protected clinical term
 set is on, so reconstruction can still run by default when pyDeid emits a span
 that a project semantic-preservation rule may preserve. See
 [Configuration](05_configuration.md#default-project-policy).

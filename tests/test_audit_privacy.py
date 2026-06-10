@@ -153,6 +153,12 @@ def test_deidentify_csv_stable_date_shift_audit_metadata_without_raw_phi(tmp_pat
     assert date_row["pydeid_surrogate_start"]
     assert date_row["pydeid_surrogate_end"]
     assert date_row["project_date_shift_policy"] == "shifted_full_date"
+    non_date_rows = [row for row in audit_rows if row["label"] != "DATE"]
+    assert non_date_rows
+    for row in non_date_rows:
+        assert row["project_date_shift_policy"] == ""
+        assert row["project_date_shift_range_days"] == ""
+        assert row["project_date_shift_days"] == ""
     assert raw_date not in audit_text
     assert raw_identifier not in audit_text
 

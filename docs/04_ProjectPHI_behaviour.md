@@ -54,6 +54,8 @@ text. Reconstruction is used for:
 - narrow clinical abbreviation preservation;
 - strict obstetric-history shorthand preservation;
 - dotted decimal-like contact preservation;
+- compact clinical-code and report-fragment preservation;
+- ordinary clinical prose and non-geographic vendor/reference preservation;
 - ordinary-token false-positive preservation;
 - title-token-fragment preservation;
 - title-context action-word preservation.
@@ -82,11 +84,13 @@ Priority order during reconstruction:
 5. stable patient-name surrogate policy;
 6. stable provider-name surrogate policy;
 7. dotted decimal-like contact vetoes;
-8. ordinary-token vetoes for selected pyDeid name false positives;
-9. title-token-fragment vetoes for pyDeid-split `Dr.` fragments in strong
+8. compact clinical-code and report-fragment vetoes;
+9. ordinary clinical prose and non-geographic vendor/reference vetoes;
+10. ordinary-token vetoes for selected pyDeid name false positives;
+11. title-token-fragment vetoes for pyDeid-split `Dr.` fragments in strong
    title/name or clinical-role/title/name contexts;
-10. title-context action-word veto;
-11. pyDeid replacement fallback.
+12. title-context action-word veto;
+13. pyDeid replacement fallback.
 
 ## Stable Date Shifting
 
@@ -154,8 +158,8 @@ arbitrary alphanumeric study codes.
 ProjectPHI includes a narrow span-local veto for selected ordinary tokens that
 pyDeid emits as `NAME` spans. The current policy preserves high-confidence
 pronoun/article tokens such as `a`, `An`, `He`, and `Her` when local context
-does not look like an initial or case label. It also preserves `NH` only in
-guarded nursing-home shorthand contexts such as `NH resident`.
+does not look like an initial or case label. It also preserves guarded shorthand
+or split-token artifacts such as `NH resident` and `at 10 weeks' gestation`.
 
 This is not a general common-word detector. Contexts such as `A. Smith`,
 `Dr. A`, `Patient A`, `Subject A`, and `Case A` continue to use pyDeid

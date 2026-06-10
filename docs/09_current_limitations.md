@@ -154,55 +154,7 @@ Provider name resources should remain governed runtime artifacts rather than
 public committed provider lists. This mode should not become a general NER
 system or a broad free-text person detector.
 
- ## 4. Date-Shift Audit Metadata Can Appear On Non-Date Spans
-
-  ### Problem
-
-  When stable date shifting is enabled, some audit rows for non-date spans can
-  show values in date-specific metadata columns such as
-  `project_date_shift_range_days` and `project_date_shift_policy`.
-
-  Example audit rows may show non-date policies in a date-specific column:
-
-  ```text
-  NAME    project_date_shift_policy=full
-  NAME    project_date_shift_policy=given
-  CONTACT project_date_shift_policy=pydeid_replacement
-  ```
-
-  The de-identified note text is not affected, and project_date_shift_days is
-  only populated for actual shifted date spans. However, the audit CSV can be
-  misleading for date-policy review because the date-specific policy column does
-  not always describe a date-shift policy.
-
-  ### Reason
-
-  The reconstruction path currently records project_date_shift_range_days and
-  project_date_shift_policy whenever date shifting is enabled for the note,
-  rather than only when the current span is a date/time/date-like span handled by
-  the date policy. For non-date spans, the generic replacement policy value can
-  therefore be copied into a date-specific audit column.
-
-  ### Potential Solution
-
-  Restrict date-shift audit metadata to spans actually handled by date policy,
-  such as:
-
-  - replacement_source="project_stable_date_shift";
-  - preserved_time;
-  - preserved_year_only;
-  - preserved_holiday_or_season;
-  - preserved_score_or_fraction;
-  - unparseable_date_placeholder;
-  - other explicitly date-like policies.
-
-  Leave date-specific audit columns blank for patient names, provider names,
-  contacts, custom regex identifiers, protected clinical terms, ordinary-token
-  vetoes, and pyDeid fallback spans.
-
-  This is an audit-cleanliness fix, not a de-identified text correctness fix.
-
-## 5. External 1000-Note Eval Still Has Medium-Priority Precision Candidates
+## 4. External 1000-Note Eval Still Has Medium-Priority Precision Candidates
 
 ### Problem
 
