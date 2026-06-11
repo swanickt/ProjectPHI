@@ -39,6 +39,8 @@ Key pages:
   metadata, and project-final replacement metadata kept separate.
 - Stable per-patient date shifting for pyDeid-detected parseable full dates,
   month/year spans, and month/day spans.
+- Public patient-specific date-shift offset helper for downstream tabular date
+  shifting.
 - Stable patient-name surrogates for explicit patient aliases, including a
   bounded exact residual pass for supplied aliases that pyDeid prunes before
   ProjectPHI sees them.

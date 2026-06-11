@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from project_phi import PHISpan, deidentify_note
+from project_phi import PHISpan, deidentify_note, get_patient_date_shift
 import project_phi.reconstruction as reconstruction
 from conftest import _date_spans
 
@@ -39,6 +39,94 @@ def test_stable_date_shift_is_deterministic_for_same_patient_secret_and_note():
 
     assert first.deidentified_text == second.deidentified_text
     assert _date_spans(first)[0].replacement == _date_spans(second)[0].replacement
+
+
+def test_get_patient_date_shift_matches_note_level_date_shift_metadata():
+    note = "Follow-up on 2001-12-10."
+    patient_id = "Patient/synth-date-public-001"
+
+    offset = get_patient_date_shift(
+        patient_id=patient_id,
+        date_shift_secret="synthetic-secret",
+    )
+    result = deidentify_note(
+        note,
+        patient_id=patient_id,
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+    )
+
+    date_span = _date_spans(result)[0]
+    assert offset == date_span.metadata["project_date_shift_days"]
+    assert date.fromisoformat(date_span.replacement) == (
+        date.fromisoformat(date_span.text) + timedelta(days=offset)
+    )
+
+
+def test_get_patient_date_shift_is_deterministic_and_bounded():
+    first = get_patient_date_shift(
+        patient_id="Patient/synth-date-public-002",
+        date_shift_secret="synthetic-secret",
+        date_shift_days=45,
+    )
+    second = get_patient_date_shift(
+        patient_id="Patient/synth-date-public-002",
+        date_shift_secret="synthetic-secret",
+        date_shift_days=45,
+    )
+
+    assert first == second
+    assert -45 <= first <= 45
+
+
+def test_get_patient_date_shift_uses_environment_secret(monkeypatch):
+    monkeypatch.setenv("PROJECT_PHI_TEST_DATE_SECRET", "synthetic-secret")
+
+    direct = get_patient_date_shift(
+        patient_id="Patient/synth-date-public-003",
+        date_shift_secret="synthetic-secret",
+    )
+    from_env = get_patient_date_shift(
+        patient_id="Patient/synth-date-public-003",
+        date_shift_secret_env_var="PROJECT_PHI_TEST_DATE_SECRET",
+    )
+
+    assert from_env == direct
+
+
+def test_get_patient_date_shift_zero_range_returns_zero():
+    assert (
+        get_patient_date_shift(
+            patient_id="Patient/synth-date-public-004",
+            date_shift_secret="synthetic-secret",
+            date_shift_days=0,
+        )
+        == 0
+    )
+
+
+def test_get_patient_date_shift_validates_inputs(monkeypatch):
+    monkeypatch.delenv("PROJECT_PHI_TEST_DATE_SECRET", raising=False)
+
+    with pytest.raises(ValueError, match="patient_id"):
+        get_patient_date_shift(
+            patient_id="",
+            date_shift_secret="synthetic-secret",
+        )
+    with pytest.raises(ValueError, match="date_shift_secret"):
+        get_patient_date_shift(patient_id="Patient/synth-date-public-005")
+    with pytest.raises(ValueError, match="date_shift_secret"):
+        get_patient_date_shift(
+            patient_id="Patient/synth-date-public-005",
+            date_shift_secret_env_var="PROJECT_PHI_TEST_DATE_SECRET",
+        )
+    with pytest.raises(ValueError, match="date_shift_days"):
+        get_patient_date_shift(
+            patient_id="Patient/synth-date-public-005",
+            date_shift_secret="synthetic-secret",
+            date_shift_days=-1,
+        )
+
 
 def test_stable_date_shift_preserves_interval_between_dates():
     note = "Follow-up on 2001-12-10 and review on 2002-01-09."

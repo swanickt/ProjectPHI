@@ -290,6 +290,30 @@ def _stable_date_shift_offset(
     return (bucket % (2 * date_shift_days + 1)) - date_shift_days
 
 
+def get_patient_date_shift(
+    *,
+    patient_id: str | None,
+    date_shift_secret: str | bytes | None = None,
+    date_shift_secret_env_var: str | None = None,
+    date_shift_days: int = 45,
+) -> int:
+    """Return the patient-specific date-shift offset in whole days.
+
+    This is the public helper for downstream tabular date shifting. It uses the
+    same secret resolution, validation, and HMAC offset logic as
+    `deidentify_note(..., stable_date_shift=True)`.
+    """
+    secret = _resolve_date_shift_secret(
+        date_shift_secret,
+        date_shift_secret_env_var,
+    )
+    return _stable_date_shift_offset(
+        patient_id=patient_id,
+        secret=secret,
+        date_shift_days=date_shift_days,
+    )
+
+
 def _is_parseable_full_date_span(
     span: PHISpan,  # Normalized pyDeid span to classify.
 ) -> bool:

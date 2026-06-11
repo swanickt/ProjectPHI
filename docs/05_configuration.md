@@ -178,6 +178,19 @@ result = deidentify_note(
 )
 ```
 
+Use `get_patient_date_shift(...)` when a downstream timeline builder needs the
+same whole-day offset for structured OMOP/tabular dates:
+
+```python
+offset = get_patient_date_shift(
+    patient_id="Patient/synthetic-001",
+    date_shift_secret_env_var="PROJECT_PHI_DATE_SHIFT_SECRET",
+)
+```
+
+The helper returns only an integer day offset, for example `-12` or `37`. It
+does not return secrets, HMAC digests, hashes, or shifted dates.
+
 Stable date shifting uses pyDeid-detected date spans only. It shifts ISO-style
 full dates such as `2001-12-10`, common English month-name full dates such as
 `March 14, 2026` or `8 August 2019`, and month/year spans such as

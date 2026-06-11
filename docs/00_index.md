@@ -35,3 +35,5 @@ growth.
   note, CSV, stable replacement, custom regex, and protected-term workflows.
 - [Current Limitations](09_current_limitations.md): known behavior gaps,
   reasons, and possible future mitigations.
+- [Longitudinal Timeline De-Identification Plan](10_longitudinal_timeline_deid_plan.md):
+  planned date-offset and per-patient stable unknown-name support.

@@ -13,6 +13,11 @@ Stable date shifting uses pyDeid-detected date spans and applies one
 patient-specific offset across a patient's notes. This preserves within-patient
 date intervals, unlike independent random replacement.
 
+`get_patient_date_shift(...)` exposes that same whole-day offset for downstream
+structured OMOP/tabular date shifting. The helper returns only the bounded
+integer offset; it does not expose secrets, HMAC digests, hashes, or shifted
+dates.
+
 The project shifts parseable full dates, including ISO-style dates and common
 English month-name dates in both month-day-year and day-month-year forms, only
 when pyDeid has already emitted a date span. Examples include
