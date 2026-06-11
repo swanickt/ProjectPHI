@@ -29,6 +29,9 @@ deidentify_note(
     provider_aliases_by_provider_id=None,
     provider_name_secret=None,
     provider_name_secret_env_var=None,
+    stable_unknown_name_surrogates=False,
+    unknown_name_secret=None,
+    unknown_name_secret_env_var=None,
     custom_regexes=None,
     protected_clinical_terms=None,
     include_builtin_protected_clinical_terms=True,
@@ -314,7 +317,7 @@ manifest.
 
 ## Patient Timeline Unknown-Name Surrogates
 
-Parameters for `deidentify_patient_notes(...)` only:
+Python parameters for `deidentify_patient_notes(...)`:
 
 - `stable_unknown_name_surrogates=True`
 - `patient_id`: required
@@ -345,7 +348,7 @@ batch = deidentify_patient_notes(
 This mode stabilizes remaining pyDeid-detected unknown names within one
 patient's supplied note batch. It does not scan for new names, does not infer
 roles, and does not alter `deidentify_note(...)`, `deidentify_csv(...)`, or CLI
-defaults.
+defaults unless explicitly enabled.
 
 Full names receive deterministic fake full names keyed by `patient_id`, the
 normalized original name span, and the unknown-name secret. Standalone
@@ -353,6 +356,25 @@ components link back to a full-name surrogate only when that component is
 unique in the same patient batch. If `Maria Lopez` and `Maria Santos` both
 occur, a later standalone `Maria` receives a separate stable standalone
 surrogate rather than being linked arbitrarily.
+
+CSV parameters:
+
+- `stable_unknown_name_surrogates=True`
+- `unknown_name_secret` or `unknown_name_secret_env_var`: required
+- `patient_id_column`: must exist and contain nonempty values for rows to be
+  grouped successfully
+
+CLI flags:
+
+```bash
+project-phi-deid input.csv output.csv \
+  --stable-unknown-name-surrogates \
+  --unknown-name-secret-env-var PROJECT_PHI_UNKNOWN_NAME_SECRET
+```
+
+The grouped CSV/CLI path preserves input row order after processing each
+patient group. Rows without a patient ID, or rows in a failed patient group,
+use the existing sanitized row-failure behavior.
 
 ### Alias Manifest CSV
 

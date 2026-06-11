@@ -7,6 +7,7 @@ processing as a thin row loop preserves project span metadata and audit policy.
 from __future__ import annotations
 
 import csv
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -17,6 +18,7 @@ from .audit import (
     _write_warning_audit_row,
 )
 from .note import deidentify_note
+from .patient_batch import deidentify_patient_notes
 
 
 def deidentify_csv(
@@ -47,16 +49,24 @@ def deidentify_csv(
     provider_aliases_by_provider_id: dict[str, Iterable[str]] | None = None,  # Provider aliases.
     provider_name_secret: str | bytes | None = None,  # Direct provider-name secret.
     provider_name_secret_env_var: str | None = None,  # Env var containing provider secret.
+    stable_unknown_name_surrogates: bool = False,  # Enable grouped patient-local names.
+    unknown_name_secret: str | bytes | None = None,  # Direct unknown-name secret.
+    unknown_name_secret_env_var: str | None = None,  # Env var containing unknown-name secret.
     custom_regexes=None,  # Project custom regex config passed to pyDeid.
     protected_clinical_terms=None,  # Runtime protected-term false-positive vetoes.
     include_builtin_protected_clinical_terms: bool = True,  # Include built-in term set.
 ):
-    """De-identify a CSV by applying `deidentify_note(...)` row by row.
+    """De-identify a CSV by applying the ProjectPHI note workflow.
 
     Parameters are intentionally close to the single-note API. File path values
     may be strings or path-like objects. The configured note text column is the
     only data column replaced for successful rows; all other input columns and
     row order are preserved.
+
+    By default, rows are processed independently with `deidentify_note(...)`.
+    When `stable_unknown_name_surrogates=True`, rows are grouped by
+    `patient_id_column` and processed with `deidentify_patient_notes(...)` so
+    remaining pyDeid-detected unknown names are stable within each patient.
 
     Failure behavior:
     - the input, output, and optional audit paths must be distinct;
@@ -110,10 +120,54 @@ def deidentify_csv(
                 raise ValueError(
                     f"Required note text column {note_text_column!r} not found in input CSV."
                 )
+            if stable_unknown_name_surrogates and patient_id_column not in fieldnames:
+                raise ValueError(
+                    "stable_unknown_name_surrogates=True requires patient_id_column "
+                    "to exist in input CSV."
+                )
 
             with open(output_path, "w", newline="", encoding=encoding) as output_handle:
                 writer = csv.DictWriter(output_handle, fieldnames=fieldnames)
                 writer.writeheader()
+
+                if stable_unknown_name_surrogates:
+                    _deidentify_csv_grouped_by_patient(
+                        reader,
+                        writer=writer,
+                        audit_writer=audit_writer,
+                        summary=summary,
+                        fieldnames=fieldnames,
+                        note_text_column=note_text_column,
+                        patient_id_column=patient_id_column,
+                        encounter_id_column=encounter_id_column,
+                        note_id_column=note_id_column,
+                        types=types,
+                        custom_dr_first_names=custom_dr_first_names,
+                        custom_dr_last_names=custom_dr_last_names,
+                        custom_patient_first_names=custom_patient_first_names,
+                        custom_patient_last_names=custom_patient_last_names,
+                        stable_date_shift=stable_date_shift,
+                        date_shift_secret=date_shift_secret,
+                        date_shift_secret_env_var=date_shift_secret_env_var,
+                        date_shift_days=date_shift_days,
+                        shift_partial_month_day_dates=shift_partial_month_day_dates,
+                        stable_patient_name_surrogates=stable_patient_name_surrogates,
+                        patient_aliases_by_patient_id=patient_aliases_by_patient_id,
+                        patient_name_secret=patient_name_secret,
+                        patient_name_secret_env_var=patient_name_secret_env_var,
+                        stable_provider_name_surrogates=stable_provider_name_surrogates,
+                        provider_aliases_by_provider_id=provider_aliases_by_provider_id,
+                        provider_name_secret=provider_name_secret,
+                        provider_name_secret_env_var=provider_name_secret_env_var,
+                        unknown_name_secret=unknown_name_secret,
+                        unknown_name_secret_env_var=unknown_name_secret_env_var,
+                        custom_regexes=custom_regexes,
+                        protected_clinical_terms=protected_clinical_terms,
+                        include_builtin_protected_clinical_terms=(
+                            include_builtin_protected_clinical_terms
+                        ),
+                    )
+                    reader = []
 
                 for row_number, row in enumerate(reader, start=2):
                     summary["rows_read"] += 1
@@ -216,6 +270,229 @@ def deidentify_csv(
             audit_handle.close()
 
     return summary
+
+
+def _deidentify_csv_grouped_by_patient(
+    reader,
+    *,
+    writer,
+    audit_writer,
+    summary: dict[str, Any],
+    fieldnames: list[str],
+    note_text_column: str,
+    patient_id_column: str,
+    encounter_id_column: str,
+    note_id_column: str,
+    types,
+    custom_dr_first_names,
+    custom_dr_last_names,
+    custom_patient_first_names,
+    custom_patient_last_names,
+    stable_date_shift: bool,
+    date_shift_secret: str | bytes | None,
+    date_shift_secret_env_var: str | None,
+    date_shift_days: int,
+    shift_partial_month_day_dates: bool,
+    stable_patient_name_surrogates: bool,
+    patient_aliases_by_patient_id: dict[str, Iterable[str]] | None,
+    patient_name_secret: str | bytes | None,
+    patient_name_secret_env_var: str | None,
+    stable_provider_name_surrogates: bool,
+    provider_aliases_by_provider_id: dict[str, Iterable[str]] | None,
+    provider_name_secret: str | bytes | None,
+    provider_name_secret_env_var: str | None,
+    unknown_name_secret: str | bytes | None,
+    unknown_name_secret_env_var: str | None,
+    custom_regexes,
+    protected_clinical_terms,
+    include_builtin_protected_clinical_terms: bool,
+) -> None:
+    """Process a CSV in patient groups while preserving original row order."""
+    input_rows = [(row_number, row) for row_number, row in enumerate(reader, start=2)]
+    summary["rows_read"] += len(input_rows)
+    groups: dict[str, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
+    failed_row_numbers: set[int] = set()
+
+    for row_number, row in input_rows:
+        patient_id = _optional_row_value(row, fieldnames, patient_id_column)
+        encounter_id = _optional_row_value(row, fieldnames, encounter_id_column)
+        note_id = _optional_row_value(row, fieldnames, note_id_column)
+        if not patient_id:
+            _record_row_failure(
+                summary,
+                audit_writer,
+                row_number,
+                patient_id,
+                encounter_id,
+                note_id,
+                ValueError("stable_unknown_name_surrogates=True requires a nonempty patient_id."),
+            )
+            failed_row_numbers.add(row_number)
+            continue
+        groups[patient_id].append((row_number, row))
+
+    results_by_row_number = {}
+    for patient_id, group_rows in groups.items():
+        try:
+            patient_aliases = _patient_aliases_for_row(
+                patient_id,
+                patient_aliases_by_patient_id,
+                stable_patient_name_surrogates=stable_patient_name_surrogates,
+            )
+            batch = deidentify_patient_notes(
+                [
+                    {
+                        "patient_id": patient_id,
+                        "encounter_id": _optional_row_value(
+                            row,
+                            fieldnames,
+                            encounter_id_column,
+                        ),
+                        "note_id": _optional_row_value(row, fieldnames, note_id_column),
+                        "note_text": row.get(note_text_column) or "",
+                    }
+                    for _row_number, row in group_rows
+                ],
+                patient_id=patient_id,
+                include_original_text=False,
+                types=types,
+                custom_dr_first_names=custom_dr_first_names,
+                custom_dr_last_names=custom_dr_last_names,
+                custom_patient_first_names=custom_patient_first_names,
+                custom_patient_last_names=custom_patient_last_names,
+                named_entity_recognition=False,
+                stable_date_shift=stable_date_shift,
+                date_shift_secret=date_shift_secret,
+                date_shift_secret_env_var=date_shift_secret_env_var,
+                date_shift_days=date_shift_days,
+                shift_partial_month_day_dates=shift_partial_month_day_dates,
+                stable_patient_name_surrogates=stable_patient_name_surrogates,
+                patient_aliases=patient_aliases,
+                patient_name_secret=patient_name_secret,
+                patient_name_secret_env_var=patient_name_secret_env_var,
+                stable_provider_name_surrogates=stable_provider_name_surrogates,
+                provider_aliases_by_provider_id=provider_aliases_by_provider_id,
+                provider_name_secret=provider_name_secret,
+                provider_name_secret_env_var=provider_name_secret_env_var,
+                stable_unknown_name_surrogates=True,
+                unknown_name_secret=unknown_name_secret,
+                unknown_name_secret_env_var=unknown_name_secret_env_var,
+                custom_regexes=custom_regexes,
+                protected_clinical_terms=protected_clinical_terms,
+                include_builtin_protected_clinical_terms=(
+                    include_builtin_protected_clinical_terms
+                ),
+            )
+        except Exception as exc:
+            for row_number, row in group_rows:
+                _record_row_failure(
+                    summary,
+                    audit_writer,
+                    row_number,
+                    patient_id,
+                    _optional_row_value(row, fieldnames, encounter_id_column),
+                    _optional_row_value(row, fieldnames, note_id_column),
+                    exc,
+                )
+                failed_row_numbers.add(row_number)
+            continue
+
+        for (row_number, _row), result in zip(group_rows, batch.results):
+            results_by_row_number[row_number] = result
+
+    for row_number, row in input_rows:
+        if row_number in failed_row_numbers:
+            continue
+        result = results_by_row_number.get(row_number)
+        if result is None:
+            continue
+        _write_successful_row(
+            writer,
+            audit_writer,
+            summary,
+            row,
+            result,
+            note_text_column=note_text_column,
+            row_number=row_number,
+            patient_id=_optional_row_value(row, fieldnames, patient_id_column),
+            encounter_id=_optional_row_value(row, fieldnames, encounter_id_column),
+            note_id=_optional_row_value(row, fieldnames, note_id_column),
+        )
+
+
+def _write_successful_row(
+    writer,
+    audit_writer,
+    summary: dict[str, Any],
+    row: dict[str, Any],
+    result,
+    *,
+    note_text_column: str,
+    row_number: int,
+    patient_id: str | None,
+    encounter_id: str | None,
+    note_id: str | None,
+) -> None:
+    """Write one successful output row and optional audit rows."""
+    output_row = dict(row)
+    output_row[note_text_column] = result.deidentified_text
+    writer.writerow(output_row)
+    summary["rows_written"] += 1
+
+    if audit_writer is not None:
+        for span_index, span in enumerate(result.spans):
+            audit_writer.writerow(_span_to_audit_row(span, span_index))
+            summary["spans_written"] += 1
+
+    for warning_index, warning_text in enumerate(result.warnings):
+        warning = _format_row_warning(
+            "Row warning",
+            row_number,
+            patient_id,
+            encounter_id,
+            note_id,
+            warning_index=warning_index,
+            warning_type=type(warning_text).__name__,
+        )
+        summary["warnings"].append(warning)
+        if audit_writer is not None:
+            _write_warning_audit_row(
+                audit_writer,
+                patient_id,
+                encounter_id,
+                note_id,
+                warning,
+            )
+
+
+def _record_row_failure(
+    summary: dict[str, Any],
+    audit_writer,
+    row_number: int,
+    patient_id: str | None,
+    encounter_id: str | None,
+    note_id: str | None,
+    exc: Exception,
+) -> None:
+    """Record one sanitized CSV row failure."""
+    summary["rows_failed"] += 1
+    warning = _format_row_warning(
+        "Row failed",
+        row_number,
+        patient_id,
+        encounter_id,
+        note_id,
+        exc,
+    )
+    summary["warnings"].append(warning)
+    if audit_writer is not None:
+        _write_warning_audit_row(
+            audit_writer,
+            patient_id,
+            encounter_id,
+            note_id,
+            warning,
+        )
 
 
 def _optional_row_value(

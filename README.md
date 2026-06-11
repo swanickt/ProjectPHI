@@ -48,9 +48,9 @@ Key pages:
   ProjectPHI sees them.
 - Stable provider-name surrogates for explicit governed provider aliases,
   including role-guarded residual matching for single-token aliases.
-- Optional patient-local stable unknown-name surrogates for Python batch
-  workflows. This does not infer names; it only stabilizes remaining
-  pyDeid-detected `NAME` spans within one patient's supplied notes.
+- Optional patient-local stable unknown-name surrogates for Python batch and
+  grouped CSV/CLI workflows. This does not infer names; it only stabilizes
+  remaining pyDeid-detected `NAME` spans within one patient's supplied notes.
 - Protected clinical-term and narrow title/context false-positive vetoes for
   observed semantic-preservation failures.
 - Dotted decimal-like contact false-positive vetoes for code/measurement
@@ -173,6 +173,11 @@ This Python-only batch API is for one patient at a time. Explicit patient and
 provider aliases still take priority when enabled. Unknown-name stabilization
 applies only to remaining pyDeid-detected name spans in the supplied batch.
 
+CSV and CLI workflows can also opt into grouped patient timeline processing
+with `stable_unknown_name_surrogates=True` or
+`--stable-unknown-name-surrogates`. In that mode rows are grouped by
+`patient_id`, processed per patient, and written back in the original row order.
+
 ## CSV And CLI Quick Start
 
 ```python
@@ -217,8 +222,8 @@ stable replacement modes.
 
 More examples are in [docs/08_examples.md](docs/08_examples.md), including
 bulk CSV processing, stable date shifting, stable patient-name surrogates,
-stable provider-name surrogates, custom regex pass-through, and protected
-clinical terms.
+stable provider-name surrogates, grouped unknown-name surrogates, custom regex
+pass-through, and protected clinical terms.
 
 ## Tests
 

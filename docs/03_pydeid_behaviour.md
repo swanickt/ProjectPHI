@@ -115,14 +115,14 @@ This distinction matters for ProjectPHI:
   for bounded residual exact matches to supplied aliases that pyDeid pruned.
 - Unknown names, clinician names, family names, and other non-matching names
   continue to use pyDeid's replacement behavior in single-note, CSV, and CLI
-  workflows. The Python-only patient batch API can optionally stabilize
-  remaining pyDeid-detected unknown names within one patient's supplied notes.
+  workflows unless patient-local unknown-name surrogates are explicitly enabled
+  through the Python batch API or grouped CSV/CLI mode.
 
 The exact generated fake names can depend on the installed Faker version and
 provider data. The stable contract is that the same `patient_id`, secret, and
 runtime environment produce the same project fake identity. Unknown names use
-pyDeid's own replacement path unless the Python patient batch API explicitly
-enables patient-local unknown-name surrogates.
+pyDeid's own replacement path unless patient-local unknown-name surrogates are
+explicitly enabled.
 
 ## Custom Regexes
 

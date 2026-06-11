@@ -202,6 +202,27 @@ name_role="unknown_name"
 alias_match_type="full" or "linked_given" or "linked_family" or "standalone"
 ```
 
+CSV/CLI grouped mode:
+
+```python
+summary = deidentify_csv(
+    "input.csv",
+    "output.csv",
+    stable_unknown_name_surrogates=True,
+    unknown_name_secret_env_var="PROJECT_PHI_UNKNOWN_NAME_SECRET",
+)
+```
+
+```bash
+project-phi-deid input.csv output.csv \
+  --stable-unknown-name-surrogates \
+  --unknown-name-secret-env-var PROJECT_PHI_UNKNOWN_NAME_SECRET
+```
+
+CSV/CLI grouping uses `patient_id_column`, processes each patient's rows as one
+batch, and writes successful rows back in original input order. Missing patient
+IDs fail through sanitized row-failure handling.
+
 ## Stable Provider-Name Surrogates
 
 Input:

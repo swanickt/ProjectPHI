@@ -249,8 +249,8 @@ pyDeid `NAME` spans within one patient's supplied notes:
 - `patient_id` is required;
 - an unknown-name secret is required directly or through
   `unknown_name_secret_env_var`;
-- the mode is Python-only and does not change single-note, CSV, or CLI
-  defaults.
+- single-note, CSV, and CLI defaults remain unchanged unless the mode is
+  explicitly enabled.
 
 This mode does not detect new names and does not infer patient/provider roles.
 It builds a patient-local registry from pyDeid name spans left after explicit
@@ -265,6 +265,11 @@ Unknown-name replacements use
 `project_name_policy="stable_unknown_name_within_patient"`,
 `name_role="unknown_name"`, and `alias_match_type` values such as `full`,
 `linked_given`, `linked_family`, or `standalone`.
+
+For CSV/CLI, `stable_unknown_name_surrogates=True` groups rows by
+`patient_id_column`, runs the patient batch policy per group, and writes
+successful rows back in original input order. Rows without a patient ID fail
+through the existing sanitized row-failure path.
 
 ## Protected Clinical Terms
 

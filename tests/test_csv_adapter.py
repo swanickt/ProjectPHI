@@ -9,6 +9,8 @@ from datetime import date
 import pytest
 
 from project_phi import deidentify_csv
+from project_phi.models import DeidentificationResult, PatientDeidentificationResult, PHISpan
+import project_phi.csv_adapter as csv_adapter
 import project_phi.note as note_module
 from conftest import _read_csv, _write_csv
 
@@ -38,6 +40,158 @@ def test_deidentify_csv_replaces_note_text_and_preserves_columns(tmp_path):
     assert summary["rows_read"] == 1
     assert summary["rows_written"] == 1
     assert summary["rows_failed"] == 0
+
+
+def test_deidentify_csv_stable_unknown_names_groups_by_patient_and_preserves_order(
+    tmp_path,
+    monkeypatch,
+):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    rows = [
+        {"patient_id": "p2", "note_id": "n3", "note_text": "P2 first"},
+        {"patient_id": "p1", "note_id": "n1", "note_text": "P1 first"},
+        {"patient_id": "p1", "note_id": "n2", "note_text": "P1 second"},
+    ]
+    _write_csv(input_file, rows)
+    calls = []
+
+    def fake_batch(notes, *, patient_id, **kwargs):
+        calls.append((patient_id, [note["note_id"] for note in notes], kwargs))
+        return PatientDeidentificationResult(
+            patient_id=patient_id,
+            results=[
+                DeidentificationResult(
+                    original_text=None,
+                    deidentified_text=f"{patient_id}:{note['note_id']}",
+                    spans=[],
+                    warnings=[],
+                    metadata={"patient_id": patient_id, "note_id": note["note_id"]},
+                )
+                for note in notes
+            ],
+        )
+
+    monkeypatch.setattr(csv_adapter, "deidentify_patient_notes", fake_batch)
+
+    summary = deidentify_csv(
+        input_file,
+        output_file,
+        stable_unknown_name_surrogates=True,
+        unknown_name_secret="synthetic-secret",
+    )
+
+    output_rows = _read_csv(output_file)
+    assert [row["note_text"] for row in output_rows] == ["p2:n3", "p1:n1", "p1:n2"]
+    assert calls == [
+        ("p2", ["n3"], {"include_original_text": False, "types": None, "custom_dr_first_names": None, "custom_dr_last_names": None, "custom_patient_first_names": None, "custom_patient_last_names": None, "named_entity_recognition": False, "stable_date_shift": False, "date_shift_secret": None, "date_shift_secret_env_var": None, "date_shift_days": 45, "shift_partial_month_day_dates": True, "stable_patient_name_surrogates": False, "patient_aliases": None, "patient_name_secret": None, "patient_name_secret_env_var": None, "stable_provider_name_surrogates": False, "provider_aliases_by_provider_id": None, "provider_name_secret": None, "provider_name_secret_env_var": None, "stable_unknown_name_surrogates": True, "unknown_name_secret": "synthetic-secret", "unknown_name_secret_env_var": None, "custom_regexes": None, "protected_clinical_terms": None, "include_builtin_protected_clinical_terms": True}),
+        ("p1", ["n1", "n2"], {"include_original_text": False, "types": None, "custom_dr_first_names": None, "custom_dr_last_names": None, "custom_patient_first_names": None, "custom_patient_last_names": None, "named_entity_recognition": False, "stable_date_shift": False, "date_shift_secret": None, "date_shift_secret_env_var": None, "date_shift_days": 45, "shift_partial_month_day_dates": True, "stable_patient_name_surrogates": False, "patient_aliases": None, "patient_name_secret": None, "patient_name_secret_env_var": None, "stable_provider_name_surrogates": False, "provider_aliases_by_provider_id": None, "provider_name_secret": None, "provider_name_secret_env_var": None, "stable_unknown_name_surrogates": True, "unknown_name_secret": "synthetic-secret", "unknown_name_secret_env_var": None, "custom_regexes": None, "protected_clinical_terms": None, "include_builtin_protected_clinical_terms": True}),
+    ]
+    assert summary["rows_read"] == 3
+    assert summary["rows_written"] == 3
+    assert summary["rows_failed"] == 0
+
+
+def test_deidentify_csv_stable_unknown_names_writes_audit_rows(tmp_path, monkeypatch):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    audit_file = tmp_path / "audit.csv"
+    rows = [{"patient_id": "p1", "note_id": "n1", "note_text": "Maria called."}]
+    _write_csv(input_file, rows)
+
+    def fake_batch(notes, *, patient_id, **_kwargs):
+        span = PHISpan(
+            start=0,
+            end=5,
+            text="Maria",
+            label="NAME",
+            source="pyDeid",
+            action="replaced",
+            replacement="Olivia",
+            metadata={
+                "patient_id": patient_id,
+                "note_id": notes[0]["note_id"],
+                "replacement_source": "project_stable_unknown_name",
+                "project_replacement": "Olivia",
+                "project_name_policy": "stable_unknown_name_within_patient",
+                "name_role": "unknown_name",
+                "alias_match_type": "standalone",
+            },
+        )
+        return PatientDeidentificationResult(
+            patient_id=patient_id,
+            results=[
+                DeidentificationResult(
+                    original_text=None,
+                    deidentified_text="Olivia called.",
+                    spans=[span],
+                    warnings=[],
+                    metadata={"patient_id": patient_id, "note_id": notes[0]["note_id"]},
+                )
+            ],
+        )
+
+    monkeypatch.setattr(csv_adapter, "deidentify_patient_notes", fake_batch)
+
+    summary = deidentify_csv(
+        input_file,
+        output_file,
+        audit_output_file=audit_file,
+        stable_unknown_name_surrogates=True,
+        unknown_name_secret="synthetic-secret",
+    )
+
+    audit_rows = _read_csv(audit_file)
+    assert summary["spans_written"] == 1
+    assert audit_rows[0]["replacement_source"] == "project_stable_unknown_name"
+    assert audit_rows[0]["project_name_policy"] == "stable_unknown_name_within_patient"
+    assert audit_rows[0]["project_replacement"] == "Olivia"
+    assert "Maria" not in audit_rows[0].values()
+
+
+def test_deidentify_csv_stable_unknown_names_missing_patient_id_fails_row(
+    tmp_path,
+    monkeypatch,
+):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    _write_csv(
+        input_file,
+        [
+            {"patient_id": "", "note_id": "n1", "note_text": "Maria called."},
+            {"patient_id": "p1", "note_id": "n2", "note_text": "Maria called."},
+        ],
+    )
+
+    def fake_batch(notes, *, patient_id, **_kwargs):
+        return PatientDeidentificationResult(
+            patient_id=patient_id,
+            results=[
+                DeidentificationResult(
+                    original_text=None,
+                    deidentified_text="done",
+                    spans=[],
+                    warnings=[],
+                    metadata={"patient_id": patient_id, "note_id": notes[0]["note_id"]},
+                )
+            ],
+        )
+
+    monkeypatch.setattr(csv_adapter, "deidentify_patient_notes", fake_batch)
+
+    summary = deidentify_csv(
+        input_file,
+        output_file,
+        stable_unknown_name_surrogates=True,
+        unknown_name_secret="synthetic-secret",
+    )
+
+    output_rows = _read_csv(output_file)
+    assert summary["rows_read"] == 2
+    assert summary["rows_written"] == 1
+    assert summary["rows_failed"] == 1
+    assert output_rows[0]["note_id"] == "n2"
+    assert "ValueError" in summary["warnings"][0]
 
 def test_deidentify_csv_missing_note_column_fails_clearly(tmp_path):
     input_file = tmp_path / "input.csv"

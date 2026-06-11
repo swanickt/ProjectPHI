@@ -263,6 +263,80 @@ def test_cli_stable_provider_name_surrogates_load_provider_manifest(
     assert "synthetic-provider-secret" not in captured.out
 
 
+def test_cli_stable_unknown_name_surrogates_uses_env_var_secret(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    monkeypatch.setenv("PROJECT_PHI_TEST_CLI_UNKNOWN_SECRET", "synthetic-unknown-secret")
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-cli-unknown-001",
+                "note_id": "Note/synth-cli-unknown-001a",
+                "note_text": "Maria Lopez called.",
+            },
+            {
+                "patient_id": "Patient/synth-cli-unknown-001",
+                "note_id": "Note/synth-cli-unknown-001b",
+                "note_text": "Maria called again.",
+            },
+        ],
+    )
+
+    exit_code = main(
+        [
+            str(input_file),
+            str(output_file),
+            "--stable-unknown-name-surrogates",
+            "--unknown-name-secret-env-var",
+            "PROJECT_PHI_TEST_CLI_UNKNOWN_SECRET",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    output_rows = _read_csv(output_file)
+    assert exit_code == 0
+    assert "rows_read=2" in captured.out
+    assert "rows_written=2" in captured.out
+    assert "synthetic-unknown-secret" not in captured.out
+    assert "Maria" not in captured.out
+    assert len(output_rows) == 2
+
+
+def test_cli_stable_unknown_name_surrogates_requires_secret_env_var(
+    tmp_path,
+    capsys,
+):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-cli-unknown-002",
+                "note_id": "Note/synth-cli-unknown-002",
+                "note_text": "Maria Lopez called.",
+            }
+        ],
+    )
+
+    exit_code = main(
+        [
+            str(input_file),
+            str(output_file),
+            "--stable-unknown-name-surrogates",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "--unknown-name-secret-env-var" in captured.err
+
+
 def test_cli_custom_regex_json_removes_synthetic_identifier_without_printing_config(
     tmp_path,
     capsys,

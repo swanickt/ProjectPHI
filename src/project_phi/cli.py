@@ -42,6 +42,8 @@ def main(
         return _argument_error("--stable-provider-name-surrogates requires --provider-alias-manifest")
     if args.stable_provider_name_surrogates and not args.provider_name_secret_env_var:
         return _argument_error("--stable-provider-name-surrogates requires --provider-name-secret-env-var")
+    if args.stable_unknown_name_surrogates and not args.unknown_name_secret_env_var:
+        return _argument_error("--stable-unknown-name-surrogates requires --unknown-name-secret-env-var")
 
     try:
         patient_aliases_by_patient_id = (
@@ -86,6 +88,8 @@ def main(
             stable_provider_name_surrogates=args.stable_provider_name_surrogates,
             provider_aliases_by_provider_id=provider_aliases_by_provider_id,
             provider_name_secret_env_var=args.provider_name_secret_env_var,
+            stable_unknown_name_surrogates=args.stable_unknown_name_surrogates,
+            unknown_name_secret_env_var=args.unknown_name_secret_env_var,
             custom_regexes=custom_regexes,
             protected_clinical_terms=protected_clinical_terms,
         )
@@ -137,6 +141,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stable-provider-name-surrogates", action="store_true")
     parser.add_argument("--provider-alias-manifest")
     parser.add_argument("--provider-name-secret-env-var")
+    parser.add_argument("--stable-unknown-name-surrogates", action="store_true")
+    parser.add_argument("--unknown-name-secret-env-var")
     parser.add_argument("--custom-regex-json")
     parser.add_argument("--protected-clinical-terms-csv")
     parser.add_argument("--encoding", default="utf-8")

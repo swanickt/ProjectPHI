@@ -132,10 +132,11 @@ rather than silently preserving raw text.
 
 ## CSV, CLI, And Audit
 
-`deidentify_patient_notes(...)` is a Python-only helper for one patient's notes
-at a time. It first applies the single-note workflow, then can stabilize
-remaining pyDeid-detected unknown names within that patient batch. CSV and CLI
-processing remain row-oriented.
+`deidentify_patient_notes(...)` is the Python helper for one patient's notes at
+a time. It first applies the single-note workflow, then can stabilize remaining
+pyDeid-detected unknown names within that patient batch. CSV and CLI workflows
+can opt into the same policy by grouping rows by `patient_id_column`; row-wise
+processing remains the default.
 
 `deidentify_csv(...)` applies `deidentify_note(...)` row by row. It does not use
 pyDeid's CSV workflow because the project needs consistent metadata, stable
