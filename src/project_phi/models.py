@@ -80,3 +80,19 @@ class DeidentificationResult:
     spans: list[PHISpan]
     warnings: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PatientDeidentificationResult:
+    """Structured result for one patient's batch de-identification run.
+
+    The batch API is intended for per-patient timelines where all notes for one
+    patient should share date-shift and optional unknown-name surrogate policy.
+    `results` preserves the input note order.
+    """
+
+    patient_id: str
+    results: list[DeidentificationResult]
+    date_shift_offset_days: int | None = None
+    warnings: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)

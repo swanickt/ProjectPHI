@@ -32,6 +32,8 @@ Key pages:
 ## Current Capabilities
 
 - Single-note de-identification with `deidentify_note(...)`.
+- Per-patient timeline de-identification with `deidentify_patient_notes(...)`
+  for Python callers that need batch-stable unknown-name surrogates.
 - CSV de-identification with `deidentify_csv(...)` and `project-phi-deid`.
 - pyDeid-first PHI detection, pruning, custom regex matching, custom name-list
   handling, and initial surrogate generation.
@@ -46,6 +48,9 @@ Key pages:
   ProjectPHI sees them.
 - Stable provider-name surrogates for explicit governed provider aliases,
   including role-guarded residual matching for single-token aliases.
+- Optional patient-local stable unknown-name surrogates for Python batch
+  workflows. This does not infer names; it only stabilizes remaining
+  pyDeid-detected `NAME` spans within one patient's supplied notes.
 - Protected clinical-term and narrow title/context false-positive vetoes for
   observed semantic-preservation failures.
 - Dotted decimal-like contact false-positive vetoes for code/measurement
@@ -142,6 +147,31 @@ shifted_full_date
 `PHISpan.start` and `PHISpan.end` are offsets into the original note. pyDeid
 surrogate offsets and project-final replacement offsets live in separate span
 metadata fields.
+
+## Patient Timeline Batch Quick Start
+
+```python
+from project_phi import deidentify_patient_notes
+
+batch = deidentify_patient_notes(
+    [
+        {"note_id": "n1", "note_text": "Maria Lopez called."},
+        {"note_id": "n2", "note_text": "Maria called again."},
+    ],
+    patient_id="Patient/synthetic-003",
+    stable_date_shift=True,
+    date_shift_secret="synthetic-date-secret",
+    stable_unknown_name_surrogates=True,
+    unknown_name_secret="synthetic-name-secret",
+)
+
+for result in batch.results:
+    print(result.metadata["note_id"], result.deidentified_text)
+```
+
+This Python-only batch API is for one patient at a time. Explicit patient and
+provider aliases still take priority when enabled. Unknown-name stabilization
+applies only to remaining pyDeid-detected name spans in the supplied batch.
 
 ## CSV And CLI Quick Start
 

@@ -1,7 +1,8 @@
 """Stable patient-name surrogate helpers for explicit patient aliases.
 
 The policy is intentionally conservative: explicit patient aliases can receive
-a stable fake identity, while unknown names remain pyDeid-only replacements.
+a stable fake identity, while this single-note alias layer leaves unknown names
+to pyDeid or to the separate patient batch unknown-name policy.
 Alias-derived pyDeid custom name lists are tried first; a bounded exact
 residual pass handles supplied aliases that pyDeid pruned before ProjectPHI
 could replace them.
@@ -324,7 +325,8 @@ def _project_patient_name_replacement(
 
     Only pyDeid-detected spans that match explicit alias policy receive the
     stable patient identity. Unknown names return `None` so reconstruction can
-    keep pyDeid's replacement and mark the span as an unknown name.
+    keep pyDeid's replacement unless the patient batch unknown-name registry
+    later supplies a patient-local stable surrogate.
     """
     normalized = _normalize_alias(span.text)
     if not normalized:
@@ -386,8 +388,8 @@ def _name_policy_metadata(
             "name_role": "not_name_action_word",
             "alias_match_type": "",
         }
-    # Unknown names may be clinicians, family, or others. They stay pyDeid-only
-    # rather than being overclaimed as patient aliases.
+    # Unknown names may be clinicians, family, or others. The patient/provider
+    # alias layers do not overclaim them as configured aliases.
     return {
         "project_name_policy": "unknown_name_pydeid",
         "name_role": "unknown_name",

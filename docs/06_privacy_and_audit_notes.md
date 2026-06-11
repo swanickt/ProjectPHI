@@ -86,6 +86,19 @@ Stable date shifting is separate from alias handling. It can be stable across
 notes using `patient_id` and a date-shift secret, without a patient alias
 manifest.
 
+## Patient Timeline Unknown Names
+
+`deidentify_patient_notes(...)` can stabilize remaining pyDeid-detected
+unknown names within one patient's supplied notes. This is a Python-only batch
+mode, not a new detector and not a role classifier. Explicit patient aliases,
+explicit provider aliases, and semantic-preservation vetoes keep priority.
+
+The unknown-name registry is built in memory from normalized pyDeid `NAME`
+spans and the runtime secret. Raw names, HMAC digests, and secrets are not
+stored in result metadata. Audit metadata records only the replacement source
+and policy class, such as `project_stable_unknown_name`, `linked_given`, or
+`standalone`.
+
 ## Provider Alias Manifests
 
 Stable provider-name surrogates require explicit provider aliases keyed by

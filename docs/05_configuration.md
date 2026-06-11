@@ -269,7 +269,8 @@ Matching aliases use one deterministic Faker-generated identity seeded from
 patient_id and the patient-name secret. ProjectPHI prefers Faker's Canadian
 English locale (en_CA), falls back to Faker's default locale if needed, and
 uses the small in-source name pools only as an emergency fallback. Unknown
-names remain pyDeid replacements.
+names remain pyDeid replacements unless the Python patient batch API explicitly
+enables patient-local unknown-name surrogates.
 
 The project does not infer gender from aliases, note text, pronouns, diagnosis,
 or service line. Exact fake names may depend on the installed Faker
@@ -310,6 +311,48 @@ receive different pyDeid-generated replacements in different notes.
 Stable date shifting is separate. It can remain stable across notes using
 `patient_id` plus a date-shift secret, and it does not require a patient alias
 manifest.
+
+## Patient Timeline Unknown-Name Surrogates
+
+Parameters for `deidentify_patient_notes(...)` only:
+
+- `stable_unknown_name_surrogates=True`
+- `patient_id`: required
+- `unknown_name_secret` or `unknown_name_secret_env_var`: required
+
+Recommended environment variable:
+
+```bash
+export PROJECT_PHI_UNKNOWN_NAME_SECRET="use-a-governed-runtime-secret"
+```
+
+Example:
+
+```python
+from project_phi import deidentify_patient_notes
+
+batch = deidentify_patient_notes(
+    [
+        {"note_id": "n1", "note_text": "Maria Lopez called."},
+        {"note_id": "n2", "note_text": "Maria called again."},
+    ],
+    patient_id="Patient/synthetic-003",
+    stable_unknown_name_surrogates=True,
+    unknown_name_secret_env_var="PROJECT_PHI_UNKNOWN_NAME_SECRET",
+)
+```
+
+This mode stabilizes remaining pyDeid-detected unknown names within one
+patient's supplied note batch. It does not scan for new names, does not infer
+roles, and does not alter `deidentify_note(...)`, `deidentify_csv(...)`, or CLI
+defaults.
+
+Full names receive deterministic fake full names keyed by `patient_id`, the
+normalized original name span, and the unknown-name secret. Standalone
+components link back to a full-name surrogate only when that component is
+unique in the same patient batch. If `Maria Lopez` and `Maria Santos` both
+occur, a later standalone `Maria` receives a separate stable standalone
+surrogate rather than being linked arbitrarily.
 
 ### Alias Manifest CSV
 
@@ -371,7 +414,8 @@ Full aliases such as `Lena Shore` can match exactly. Single-token aliases such
 as `Chen`, `Green`, or `Cook` require nearby provider-role context, for example
 `Radiologist Chen`, `Social worker Green`, or an adjacent `MD` marker. This
 keeps configured common-word-like provider names from being replaced globally.
-Unknown names remain pyDeid replacements.
+Unknown names remain pyDeid replacements unless the Python patient batch API
+explicitly enables patient-local unknown-name surrogates.
 
 Provider fake identities are deterministic per `provider_id` and provider-name
 secret. Exact fake names may depend on the installed Faker version/provider

@@ -176,9 +176,10 @@ name replacements for explicit patient aliases:
 - explicit aliases are required;
 - pyDeid name detection must be enabled.
 
-The project does not infer aliases from note text. Unknown name spans keep
-pyDeid replacement behavior and can be marked as `unknown_name_pydeid` when
-reconstruction metadata is present.
+The project does not infer aliases from note text. Outside the explicit
+patient batch unknown-name mode, unknown name spans keep pyDeid replacement
+behavior and can be marked as `unknown_name_pydeid` when reconstruction
+metadata is present.
 
 Explicit aliases are first passed to pyDeid through custom patient name-list
 hooks where possible. After pyDeid pruning, ProjectPHI also performs a bounded
@@ -214,9 +215,10 @@ name replacements for explicit provider aliases:
 - pyDeid name detection must be enabled.
 
 Provider aliases are governed runtime configuration, not a provider detector.
-ProjectPHI does not infer provider names from note text. Unknown names keep
-pyDeid replacement behavior and can be marked as `unknown_name_pydeid` when
-reconstruction metadata is present.
+ProjectPHI does not infer provider names from note text. Outside the explicit
+patient batch unknown-name mode, unknown names keep pyDeid replacement behavior
+and can be marked as `unknown_name_pydeid` when reconstruction metadata is
+present.
 
 Explicit provider aliases are first passed to pyDeid through custom doctor
 name-list hooks where possible. After pyDeid pruning, ProjectPHI performs a
@@ -238,6 +240,31 @@ Policy metadata uses `project_name_policy="known_provider_alias"` or
 `project_name_policy="residual_explicit_provider_alias"`,
 `name_role="known_provider_alias"`, and `alias_match_type` values such as
 `full`, `given`, or `single_token`.
+
+## Patient Timeline Unknown-Name Surrogates
+
+`deidentify_patient_notes(...)` can optionally stabilize remaining unknown
+pyDeid `NAME` spans within one patient's supplied notes:
+
+- `patient_id` is required;
+- an unknown-name secret is required directly or through
+  `unknown_name_secret_env_var`;
+- the mode is Python-only and does not change single-note, CSV, or CLI
+  defaults.
+
+This mode does not detect new names and does not infer patient/provider roles.
+It builds a patient-local registry from pyDeid name spans left after explicit
+patient aliases, explicit provider aliases, and semantic-preservation vetoes.
+Full names receive one deterministic fake full name. A later standalone given
+or family component links back to that full-name surrogate only when the
+component is unique in the patient's batch. Ambiguous standalone components
+receive their own stable standalone surrogate.
+
+Unknown-name replacements use
+`replacement_source="project_stable_unknown_name"`,
+`project_name_policy="stable_unknown_name_within_patient"`,
+`name_role="unknown_name"`, and `alias_match_type` values such as `full`,
+`linked_given`, `linked_family`, or `standalone`.
 
 ## Protected Clinical Terms
 

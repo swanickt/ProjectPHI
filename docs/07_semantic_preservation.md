@@ -115,6 +115,13 @@ role-preserving but not gender-concordant: the wrapper does not infer gender
 from breast oncology context, names, pronouns, or diagnosis because that would
 add an unvalidated inference layer and can create incorrect assumptions.
 
+`deidentify_patient_notes(...)` can additionally stabilize remaining unknown
+pyDeid name spans within one patient's supplied notes. This batch mode
+preserves textual coherence, not role semantics: it does not infer whether a
+name is a patient, provider, relative, author, or site contact. Standalone
+components link to full-name surrogates only when unique in the patient batch;
+ambiguous components receive stable standalone surrogates.
+
 ## Provider Name Semantics
 
 Stable provider-name surrogates require explicit provider aliases from governed

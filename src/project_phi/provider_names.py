@@ -2,7 +2,8 @@
 
 Provider aliases are governed runtime configuration, not a detector. The
 helpers here can replace exact configured provider names that pyDeid emits or
-misses, while unknown names remain pyDeid behavior. Single-token aliases such
+misses, while this provider-alias layer leaves unknown names to pyDeid or to
+the separate patient batch unknown-name policy. Single-token aliases such
 as `Chen`, `Green`, or `Cook` require nearby provider-role context so common
 ordinary words are not replaced globally.
 

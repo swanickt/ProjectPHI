@@ -114,12 +114,15 @@ This distinction matters for ProjectPHI:
   runtime secrets, for pyDeid-detected spans that match explicit aliases and
   for bounded residual exact matches to supplied aliases that pyDeid pruned.
 - Unknown names, clinician names, family names, and other non-matching names
-  continue to use pyDeid's replacement behavior.
+  continue to use pyDeid's replacement behavior in single-note, CSV, and CLI
+  workflows. The Python-only patient batch API can optionally stabilize
+  remaining pyDeid-detected unknown names within one patient's supplied notes.
 
 The exact generated fake names can depend on the installed Faker version and
 provider data. The stable contract is that the same `patient_id`, secret, and
-runtime environment produce the same project fake identity; unknown names
-continue to use pyDeid's own replacement path.
+runtime environment produce the same project fake identity. Unknown names use
+pyDeid's own replacement path unless the Python patient batch API explicitly
+enables patient-local unknown-name surrogates.
 
 ## Custom Regexes
 
@@ -153,7 +156,8 @@ and provider-name replacement applies to explicit alias policy only. If pyDeid
 still misses or prunes a supplied alias, ProjectPHI can create a residual span
 using bounded exact matching against that caller-supplied alias. Single-token
 provider aliases require provider-role context. Unknown names remain pyDeid
-replacements.
+replacements unless the Python patient batch API explicitly stabilizes
+remaining unknown-name spans within one patient's supplied notes.
 
 ## Title-Context Name Heuristics
 
@@ -182,7 +186,8 @@ unchanged.
 When no project reconstruction is needed, ProjectPHI returns pyDeid's
 de-identified text directly. When reconstruction is needed, non-date/non-name
 spans and unknown names use pyDeid's replacement fallback unless another
-project policy applies.
+project policy applies. The optional patient batch unknown-name registry is one
+such policy and is not active for single-note, CSV, or CLI defaults.
 
 pyDeid replacement text and pyDeid surrogate offsets are preserved in span
 metadata so audit/debug workflows can distinguish pyDeid output from

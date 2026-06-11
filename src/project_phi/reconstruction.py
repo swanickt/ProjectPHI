@@ -31,7 +31,9 @@ Replacement priority:
 10. Preserve narrow ordinary-token false positives such as articles/pronouns.
 11. Preserve narrow title-token fragments such as pyDeid-split `Dr.` pieces.
 12. Preserve narrow title-context action-word false positives.
-13. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
+13. Optionally apply patient-local stable unknown-name surrogates when the
+    Python batch API supplies a registry.
+14. Fall back to pyDeid's replacement, or `<PHI>` if pyDeid did not provide one.
 
 Examples:
     Original:
@@ -90,6 +92,7 @@ from .title_context import (
     _title_token_fragment_match,
     _title_token_fragment_metadata,
 )
+from .unknown_names import _project_unknown_name_replacement, _unknown_name_policy_metadata
 
 _ORDINARY_ARTICLE_PRONOUN_TOKENS = {
     "a",
@@ -494,6 +497,7 @@ def _reconstruct_with_project_replacements(
     provider_name_identities: dict[str, dict[str, str]] | None = None,
     protected_terms_profile: dict[str, Any] | None = None,
     shift_partial_month_day_dates: bool = True,
+    unknown_name_registry: dict[str, Any] | None = None,
 ) -> tuple[str, list[PHISpan], list[str]]:
     """Rebuild final note text from original text and normalized spans.
 
@@ -516,6 +520,8 @@ def _reconstruct_with_project_replacements(
         patient_name_identity: Optional deterministic fake patient identity.
         protected_terms_profile: Optional protected-term profile used to preserve
             clinical terms that pyDeid emitted as spans.
+        unknown_name_registry: Optional patient-local stable unknown-name
+            replacement registry. Single-note and CSV callers do not pass this.
 
     Returns:
         A tuple `(final_text, final_spans, warnings)`:
@@ -571,6 +577,7 @@ def _reconstruct_with_project_replacements(
             provider_name_identities=provider_name_identities,
             protected_terms_profile=protected_terms_profile,
             shift_partial_month_day_dates=shift_partial_month_day_dates,
+            unknown_name_registry=unknown_name_registry,
         )
         replacement_text, replacement_source, policy, policy_metadata = replacement_info
         if policy == "unparseable_date_placeholder":
@@ -754,6 +761,7 @@ def _project_replacement_for_span(
     provider_name_identities: dict[str, dict[str, str]] | None = None,
     protected_terms_profile: dict[str, Any] | None = None,
     shift_partial_month_day_dates: bool = True,
+    unknown_name_registry: dict[str, Any] | None = None,
 ) -> tuple[str, str, str, dict[str, Any]]:
     """Choose final replacement text and policy metadata for one span.
 
@@ -813,7 +821,11 @@ def _project_replacement_for_span(
        title-derived name spans in `Dr.` contexts. Lower-case words use the
        base rule; capitalized words require following clinical-object context.
 
-    13. pyDeid fallback:
+    13. Stable unknown-name batch policy:
+       if the Python batch API supplied a patient-local registry, replace
+       remaining unknown pyDeid name spans consistently within that batch.
+
+    14. pyDeid fallback:
        use pyDeid's replacement, or `<PHI>` if no replacement is available.
 
     Args:
@@ -842,7 +854,10 @@ def _project_replacement_for_span(
           "title_context_action_word_exact_match", {...})`
         - title-token fragment: `("D", "project_title_token_veto",
           "preserved_title_token_fragment", {...})`
-        - unknown name: `("[**Name**]", "pyDeid", "unknown_name_pydeid", {})`
+        - batch unknown name: `("Olivia Chen",
+          "project_stable_unknown_name", "full", {...})`
+        - unknown name fallback: `("[**Name**]", "pyDeid",
+          "unknown_name_pydeid", {})`
 
     Notes:
         This function does not mutate `span`.
@@ -929,7 +944,7 @@ def _project_replacement_for_span(
         return "<DATE>", "project_stable_date_shift", "unparseable_date_placeholder", {}
 
     # Patient-name policy: only explicit patient aliases receive the stable fake
-    # patient identity. Unknown names remain pyDeid replacements.
+    # patient identity here. The optional batch unknown-name registry runs later.
     if patient_name_alias_profile is not None and patient_name_identity is not None and span.label == "NAME":
         name_replacement = _project_patient_name_replacement(
             span,
@@ -1045,6 +1060,15 @@ def _project_replacement_for_span(
             "project_title_context_action_word_veto",
             title_context_match["project_title_context_policy"],
             _title_context_action_word_metadata(title_context_match),
+        )
+
+    unknown_name_replacement = _project_unknown_name_replacement(span, unknown_name_registry)
+    if unknown_name_replacement is not None:
+        return (
+            unknown_name_replacement.text,
+            "project_stable_unknown_name",
+            unknown_name_replacement.policy,
+            _unknown_name_policy_metadata(unknown_name_replacement),
         )
 
     if patient_name_alias_profile is not None and patient_name_identity is not None and span.label == "NAME":

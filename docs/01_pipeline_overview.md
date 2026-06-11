@@ -32,6 +32,7 @@ note text
        - ordinary-token veto
        - title-token-fragment veto
        - title-context action-word veto
+       - optional patient-local unknown-name batch surrogate
        - pyDeid replacement fallback
   -> DeidentificationResult
 ```
@@ -69,6 +70,8 @@ runtime behavior.
 - explicit metadata separation for original offsets, pyDeid surrogate offsets,
   and project-final replacement offsets;
 - a single-note wrapper, CSV adapter, config loaders, and CLI;
+- a Python per-patient batch wrapper for timeline-stable unknown-name
+  surrogates;
 - internal audit CSV output;
 - stable per-patient date shifting for supported pyDeid-detected full dates,
   month/year spans, and month/day spans;
@@ -76,6 +79,8 @@ runtime behavior.
   exact residual matching for supplied aliases missed or pruned by pyDeid;
 - stable provider-name surrogates for explicit governed aliases only,
   including role-guarded residual matching for single-token provider aliases;
+- optional patient-local stable unknown-name surrogates for remaining
+  pyDeid-detected `NAME` spans in one patient's Python batch;
 - protected clinical term false-positive vetoes;
 - dotted decimal-like contact false-positive vetoes;
 - narrow clinical abbreviation and ordinary-token false-positive vetoes;
@@ -118,13 +123,19 @@ Reconstruction priority:
 11. title-token-fragment vetoes for cases where pyDeid splits a
    non-identifying `Dr.` token into name spans;
 12. title-context action-word veto;
-13. pyDeid replacement fallback.
+13. optional patient-local stable unknown-name batch surrogate;
+14. pyDeid replacement fallback.
 
 Reconstruction prunes deterministic pyDeid overlaps such as nested same-range
 fragments before rebuilding text. Unresolved mixed overlaps still fail closed
 rather than silently preserving raw text.
 
 ## CSV, CLI, And Audit
+
+`deidentify_patient_notes(...)` is a Python-only helper for one patient's notes
+at a time. It first applies the single-note workflow, then can stabilize
+remaining pyDeid-detected unknown names within that patient batch. CSV and CLI
+processing remain row-oriented.
 
 `deidentify_csv(...)` applies `deidentify_note(...)` row by row. It does not use
 pyDeid's CSV workflow because the project needs consistent metadata, stable

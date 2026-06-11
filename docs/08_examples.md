@@ -120,8 +120,8 @@ Expected behavior:
   pinned runtime environment.
 - Supplied aliases that pyDeid misses or prunes can still be replaced by a
   bounded exact residual pass.
-- Unknown or clinician names remain pyDeid replacements and are not treated as
-  patient aliases.
+- Unknown or clinician names remain pyDeid replacements in single-note/CSV
+  workflows and are not treated as patient aliases.
 
 Example output shape:
 
@@ -154,6 +154,52 @@ Relevant unknown-name span metadata, when reconstruction metadata is present:
 ```text
 project_name_policy="unknown_name_pydeid"
 name_role="unknown_name"
+```
+
+## Patient Timeline Unknown-Name Surrogates
+
+Input notes for one patient:
+
+```text
+n1: Maria Lopez called the clinic.
+n2: Maria called again.
+n3: Lopez left a message.
+```
+
+Configuration:
+
+```python
+from project_phi import deidentify_patient_notes
+
+batch = deidentify_patient_notes(
+    [
+        {"note_id": "n1", "note_text": "Maria Lopez called the clinic."},
+        {"note_id": "n2", "note_text": "Maria called again."},
+        {"note_id": "n3", "note_text": "Lopez left a message."},
+    ],
+    patient_id="Patient/synthetic-003",
+    stable_unknown_name_surrogates=True,
+    unknown_name_secret_env_var="PROJECT_PHI_UNKNOWN_NAME_SECRET",
+)
+```
+
+Expected behavior:
+
+- pyDeid remains responsible for detecting the name spans.
+- The registry is built only within this one patient's supplied notes.
+- `Maria Lopez` receives one deterministic fake full name.
+- Later standalone `Maria` and `Lopez` link to that fake given/family name only
+  because each component is unique in the batch.
+- If `Maria Lopez` and `Maria Santos` both occur, standalone `Maria` receives a
+  separate stable standalone surrogate instead of linking arbitrarily.
+
+Relevant span metadata:
+
+```text
+replacement_source="project_stable_unknown_name"
+project_name_policy="stable_unknown_name_within_patient"
+name_role="unknown_name"
+alias_match_type="full" or "linked_given" or "linked_family" or "standalone"
 ```
 
 ## Stable Provider-Name Surrogates
@@ -191,7 +237,8 @@ Expected behavior:
 - Configured single-token names are not replaced globally in ordinary text, so
   `Green vegetables` remains unchanged unless `Green` appears in provider-role
   context.
-- Unknown or unconfigured names remain pyDeid replacements.
+- Unknown or unconfigured names remain pyDeid replacements unless the Python
+  patient batch API explicitly stabilizes remaining unknown-name spans.
 
 Example output shape:
 
