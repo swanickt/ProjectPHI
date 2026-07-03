@@ -1,6 +1,6 @@
 # ProjectPHI
 
-ProjectPHI is an internal Ontario/Canadian clinical free-text
+ProjectPHI is an Ontario/Canadian clinical free-text
 de-identification pipeline built around
 [`pyDeid`](https://github.com/GEMINI-Medicine/pyDeid).
 
@@ -12,6 +12,16 @@ language where possible.
 ProjectPHI is not a legal certification tool. It does not claim full
 de-identification, anonymization, PHIPA compliance, HIPAA compliance, or
 external-release safety.
+
+## Acknowledgements And Maintainer
+
+ProjectPHI is built on pyDeid from GEMINI Medicine. pyDeid provides the core
+PHI detection, pruning, and fallback replacement behavior. ProjectPHI adds
+project-specific reconstruction, audit, date-shifting, alias-stability, and
+semantic-preservation behavior for governed Ontario clinical text workflows.
+
+ProjectPHI is maintained by Thomas Swanick
+<thomas.swanick@mail.utoronto.ca>.
 
 ## Documentation
 
@@ -66,10 +76,12 @@ Key pages:
 ## What It Does Not Do
 
 - It does not use NER, LLMs, external APIs, or a separate PHI detector.
-- It does not ship Sunnybrook/Ontario site-specific regexes, facility lists,
+- It does not ship Ontario site-specific regexes, facility lists,
   provider lists, or broad gazetteers.
 - It does not bundle pyDeid inside the `project_phi` package.
-- It does not commit large terminology-derived protected-term lists.
+- It does not ship site-specific provider, facility, patient, or local
+  geography lists. It does include a curated non-site-specific protected
+  clinical-term inventory for semantic preservation.
 - It does not guarantee that every sensitive phrase is removed.
 - It does not make outputs safe for external release by itself.
 

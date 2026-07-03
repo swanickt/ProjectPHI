@@ -6,9 +6,9 @@ risk while preserving clinically useful text for downstream review and possible 
 
 It is not a legal certification tool. It does not guarantee full text de-identification,
 anonymization, PHIPA compliance, HIPAA compliance, or external-release safety.
-The current pipeline uses pyDeid as its core PHI detection and replacement engine. **ProjectPHI** wraps this engine with a small set of project-specific controls for consistency, reviewability, and clinical text preservation.
+The current pipeline uses pyDeid as its core PHI detection and replacement engine. **ProjectPHI** wraps this engine with targeted curated controls for consistency, reviewability, and clinical text preservation.
 
-As of now, the project does **not** use named-entity recognition (NER), LLMs, external API calls, a separate PHI detector, its own broad gazetteers, or Sunnybrook/Ontario-specific identifier rules.
+As of now, the project does **not** use named-entity recognition (NER), LLMs, external API calls, a separate PHI detector, its own broad gazetteers, or Ontario site-specific identifier rules.
 
 The built-in semantic-preservation rules should be treated as the current
 stable baseline. Further terminology expansion should come from governed local
