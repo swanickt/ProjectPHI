@@ -12,8 +12,6 @@ modules. The objects exported here are the supported Python API:
   downstream tabular date shifting.
 - config-loader helpers load small CSV/JSON runtime configuration for CLI and
   Python workflows.
-
-Private modules may change more freely; keep `__all__` small and intentional.
 """
 
 from .csv_adapter import deidentify_csv
