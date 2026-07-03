@@ -38,10 +38,14 @@ were considered. These are smoke reviews without gold labels.
 ## Staleness Note
 
 The included chunk reviews are dated snapshots from the last local chunk runs.
-Later unit-tested semantic-preservation changes may make small parts of these
-chunk analyses stale. The summaries remain useful for broad issue-profile
-documentation, but the chunks should be rerun before citing final current
-performance metrics.
+Some issue groups identified during chunk review were addressed in later
+unit-tested ProjectPHI changes, including bounded semantic-preservation guards
+for selected clinical phrases, abbreviations, source-ID/UUID-like artifacts,
+vendor/device terms, and pathology/report terminology. Because the chunks were
+not fully rerun after every later fix, the included manual reviews should be
+read as dated review snapshots rather than final current-state issue counts.
+The summaries remain useful for broad issue-profile documentation, but the
+chunks should be rerun before citing final current performance metrics.
 
 ## Source And License Notes
 

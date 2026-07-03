@@ -76,8 +76,13 @@ Important context:
 
 - The chunk run folders reflected the ProjectPHI pipeline state at the time each
   chunk was last rerun.
-- Later unit-tested semantic-preservation changes may make small parts of these
-  chunk analyses stale.
+- Some issue groups identified during chunk review were addressed in later
+  unit-tested ProjectPHI changes, including bounded semantic-preservation
+  guards for selected clinical phrases, abbreviations, source-ID/UUID-like
+  artifacts, vendor/device terms, and pathology/report terminology. Because the
+  chunks were not fully rerun after every later fix, the included manual
+  reviews should be read as dated review snapshots rather than final
+  current-state issue counts.
 - The reviews remain useful for broad issue-profile documentation, but they
   should not be cited as final current-performance metrics without rerunning the
   chunks.
