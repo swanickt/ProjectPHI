@@ -183,9 +183,3 @@ Continue adding exact, phrase-bound, or context-bound semantic-preservation
 rules for low-risk clinical variants, especially those likely to occur in
 breast oncology notes. Keep geography, institutions, care sites, and local
 site metadata governed outside the public built-in list.
-
-## Other:
-
-Date shift format changes:
-- Staff Radiologist on 1/13/2023 5:05 PM EST -> Staff Radiologist on 2022-12-24 5:05 PM EST
-- oct 31 -> October 11

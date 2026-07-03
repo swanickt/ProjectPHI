@@ -442,10 +442,10 @@ Expected behavior:
   detector.
 - Raw regex patterns are not copied into span metadata, audit rows, warnings,
   or CLI output.
-- The configured `phi_type` is used by pyDeid during replacement. Avoid
-  built-in pyDeid type words such as `MRN`, `Name`, `Date`, `Time`, or
-  `Hospital` in custom `phi_type` values if you want the configured constant
-  `replacement` to appear in the final text.
+- The configured `phi_type` is used by pyDeid during replacement. To make the
+  configured constant `replacement` appear in the final text, avoid built-in
+  pyDeid type words such as `MRN`, `Name`, `Date`, `Time`, or `Hospital` in
+  custom `phi_type` values.
 
 Example output shape:
 

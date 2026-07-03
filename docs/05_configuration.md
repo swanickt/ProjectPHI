@@ -639,8 +639,9 @@ order, rejects missing columns, empty values, or incomplete component rows with
 sanitized row-number errors, and does not infer terms.
 
 Larger externally derived protected-term lists should be managed as governed
-runtime CSV artifacts and supplied with `--protected-clinical-terms-csv`. Do
-not commit large terminology-derived lists to the public repository.
+runtime CSV artifacts and supplied with `--protected-clinical-terms-csv`.
+Site-specific provider, facility, patient, or local geography lists should not
+be committed to the public repository.
 
 Source guidance:
 

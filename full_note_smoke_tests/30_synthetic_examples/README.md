@@ -11,27 +11,34 @@ This smoke test uses a batch of 30 synthetic notes, across 14 fictional patient 
 - breast oncology, imaging, radiation, pathology, copied correspondence,
   administrative, role-context, and title-context false-positive scenarios.
 
-MTSamples pages were used as format/category references for AI-written synthetic examples.
+MTSamples pages were used as format/category references for synthetic examples
+written with GPT-5.5.
 
 ## How The Notes Were Created
 
-The notes in `input_notes.csv` are synthetic AI-generated (gpt-5.5) smoke-test notes. They are not copied patient notes, not copied
-clinical examples, and not real PHI. Some note wording is intentionally artificial because gpt-5.5 was asked to include ProjectPHI edge cases, such as title-context false positives, protected
-  clinical terms, stable alias behavior, synthetic identifiers, and failure-path rows. These notes are therefore smoke-test stress cases, not examples of natural
-  clinical documentation style.
+The notes in `input_notes.csv` are synthetic GPT-5.5 smoke-test notes. They are
+not copied patient notes, not copied clinical examples, and not real PHI. Some
+note wording is intentionally artificial because GPT-5.5 was asked to include
+ProjectPHI edge cases, such as title-context false positives, protected
+clinical terms, stable alias behavior, synthetic identifiers, and failure-path
+rows. These notes are therefore smoke-test stress cases, not examples of
+natural clinical documentation style.
 
 
 The note set was created by:
 
-1. Having gpt-5.5 review public MTSamples pages listed in `source_manifest.csv` to identify
+1. Having GPT-5.5 review public MTSamples pages listed in
+   `source_manifest.csv` to identify
    broad document styles and clinical-note categories, such as breast oncology
    consults, SOAP/progress follow-up notes, radiation oncology follow-up notes,
    hereditary-risk/discharge-style notes, and hematology/oncology
    procedure/pathology-style categories.
-2. Then, having gpt-5.5 write new synthetic notes locally in those broad styles, using invented
+2. Then, having GPT-5.5 write new synthetic notes locally in those broad
+   styles, using invented
    patient IDs, names, emails, phone numbers, identifiers, dates, facilities,
    clinician names, family names, and local-code-like strings.
-3. gpt-5.5 was prompted to add targeted stress cases based on ProjectPHI's expected behavior:
+3. GPT-5.5 was prompted to add targeted stress cases based on ProjectPHI's
+   expected behavior:
    stable dates across repeated notes for the same patient, explicit patient
    aliases, missing-alias failure rows, copied-correspondence names,
    clinician/family names, title-context false positives, protected clinical
