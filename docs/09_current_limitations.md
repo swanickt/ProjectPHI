@@ -184,6 +184,3 @@ rules for low-risk clinical variants, especially those likely to occur in
 breast oncology notes. Keep geography, institutions, care sites, and local
 site metadata governed outside the public built-in list.
 
-## Public Branch Metadata
-
-Add `project.urls` to `pyproject.toml` later once the pyDeid branch URL exists.

@@ -28,6 +28,12 @@ dev = [
 [project.scripts]
 project-phi-deid = "project_phi.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/swanickt/ProjectPHI"
+Repository = "https://github.com/swanickt/ProjectPHI"
+Issues = "https://github.com/swanickt/ProjectPHI/issues"
+pyDeid = "https://github.com/GEMINI-Medicine/pyDeid"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["project_phi*"]
