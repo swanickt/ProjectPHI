@@ -1,6 +1,6 @@
 # External Smoke-Review Summaries
 
-This folder contains public summaries from larger ProjectPHI smoke reviews over
+This folder contains summaries from larger ProjectPHI smoke reviews over
 external public clinical-text resources. It is intended to document review
 method, source composition, and issue profiles without committing raw note text
 or full row-level audit outputs.

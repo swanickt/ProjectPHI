@@ -87,21 +87,6 @@ Important context:
   should not be cited as final current-performance metrics without rerunning the
   chunks.
 
-## Access Gaps In The 10000-Row Build
-
-Several desired breast-focused sources were not included in the local 10000-row
-build:
-
-- NCI ML Ready Pathology Reports: not downloaded because the MoDaC asset page
-  states file downloads require login.
-- RADSet BI-RADS: not included because the Hugging Face repository is
-  gated/contact-share access.
-- Swiss-Mammo: not included because PhysioNet marks the files as restricted and
-  requires a registered user data-use agreement.
-- Kaggle Portuguese mammography synthetic dataset: not included in this build
-  to avoid Kaggle-authentication dependency and multilingual synthetic
-  dominance.
-
 ## Recommended Interpretation
 
 These reviews support public discussion of how ProjectPHI was stress-tested over
