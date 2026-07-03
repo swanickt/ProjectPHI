@@ -43,7 +43,7 @@ Key pages:
 
 - Single-note de-identification with `deidentify_note(...)`.
 - Per-patient timeline de-identification with `deidentify_patient_notes(...)`
-  for Python callers that need batch-stable unknown-name surrogates.
+  for Python callers that need batch-stable name surrogates.
 - CSV de-identification with `deidentify_csv(...)` and `project-phi-deid`.
 - pyDeid-first PHI detection, pruning, custom regex matching, custom name-list
   handling, and initial surrogate generation.
@@ -82,7 +82,7 @@ Key pages:
   include a curated non-site-specific protected clinical-term inventory for
   semantic preservation.
 - It does not guarantee that every sensitive phrase is removed.
-- It does not make outputs safe for external release by itself.
+- It does not claim to make outputs safe for external release by itself.
 
 ## Installation
 
@@ -120,6 +120,7 @@ and `numpy<2` for the tested spaCy/thinc stack.
 
 ## Python Quick Start
 
+Create a file `projectphi_quick_start.py`:
 ```python
 from project_phi import deidentify_note
 
@@ -138,6 +139,11 @@ for span in result.spans:
     print(span.label, span.start, span.end, span.pydeid_types, span.replacement)
     print(span.metadata.get("replacement_source"))
     print(span.metadata.get("project_date_shift_policy"))
+```
+
+**Run with:**
+```python
+uv run projectphi_quick_start.py
 ```
 
 Observed output from the current environment:
@@ -161,6 +167,7 @@ metadata fields.
 
 ## Patient Timeline Batch Quick Start
 
+Create a file `projectphi_batch_quick_start.py`:
 ```python
 from project_phi import deidentify_patient_notes
 
@@ -178,6 +185,11 @@ batch = deidentify_patient_notes(
 
 for result in batch.results:
     print(result.metadata["note_id"], result.deidentified_text)
+```
+
+**Run with:**
+```python
+uv run projectphi_batch_quick_start.py
 ```
 
 This Python-only batch API is for one patient at a time. Explicit patient and
