@@ -76,12 +76,11 @@ Key pages:
 ## What It Does Not Do
 
 - It does not use NER, LLMs, external APIs, or a separate PHI detector.
-- It does not ship Ontario site-specific regexes, facility lists,
-  provider lists, or broad gazetteers.
 - It does not bundle pyDeid inside the `project_phi` package.
-- It does not ship site-specific provider, facility, patient, or local
-  geography lists. It does include a curated non-site-specific protected
-  clinical-term inventory for semantic preservation.
+- It does not ship Ontario site-specific regexes, provider lists, facility
+  lists, patient lists, local geography lists, or broad gazetteers. It does
+  include a curated non-site-specific protected clinical-term inventory for
+  semantic preservation.
 - It does not guarantee that every sensitive phrase is removed.
 - It does not make outputs safe for external release by itself.
 
