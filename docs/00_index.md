@@ -33,5 +33,3 @@ growth.
   external terminology source policy.
 - [Examples](08_examples.md): synthetic input/output/behavior examples for the
   note, CSV, stable replacement, custom regex, and protected-term workflows.
-- [Current Limitations](09_current_limitations.md): known behavior gaps,
-  reasons, and possible future mitigations.

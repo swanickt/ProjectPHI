@@ -7,8 +7,11 @@ import project_phi.note as note_module
 from conftest import _date_spans, _name_spans, _stable_patient_name_spans
 from project_phi.patient_names import (
     _FAKE_FAMILY_NAMES,
+    _FAKE_FEMININE_GIVEN_NAMES,
     _FAKE_GIVEN_NAMES,
+    _FAKE_MASCULINE_GIVEN_NAMES,
     _build_patient_alias_profile,
+    _normalize_patient_name_style,
     _project_patient_name_replacement,
     _stable_patient_name_identity,
 )
@@ -29,6 +32,75 @@ def test_stable_patient_name_identity_uses_larger_deterministic_pool_when_availa
     # When Faker is available through pyDeid, stable names should no longer be
     # constrained to the tiny emergency fallback pools.
     assert first["given"] not in _FAKE_GIVEN_NAMES or first["family"] not in _FAKE_FAMILY_NAMES
+
+
+def test_stable_patient_name_identity_accepts_explicit_name_style():
+    feminine = _stable_patient_name_identity(
+        patient_id="Patient/synth-name-style-001",
+        secret=b"synthetic-secret",
+        name_style="feminine",
+    )
+    masculine = _stable_patient_name_identity(
+        patient_id="Patient/synth-name-style-001",
+        secret=b"synthetic-secret",
+        name_style="masculine",
+    )
+
+    assert feminine["patient_name_style"] == "feminine"
+    assert masculine["patient_name_style"] == "masculine"
+    assert feminine == _stable_patient_name_identity(
+        patient_id="Patient/synth-name-style-001",
+        secret=b"synthetic-secret",
+        name_style="FEMININE",
+    )
+    assert feminine["given"] != masculine["given"] or feminine["full"] != masculine["full"]
+
+
+def test_stable_patient_name_identity_neutral_style_matches_default():
+    default = _stable_patient_name_identity(
+        patient_id="Patient/synth-name-style-002",
+        secret=b"synthetic-secret",
+    )
+    neutral = _stable_patient_name_identity(
+        patient_id="Patient/synth-name-style-002",
+        secret=b"synthetic-secret",
+        name_style="neutral",
+    )
+
+    assert default == neutral
+    assert "patient_name_style" not in neutral
+
+
+def test_patient_name_style_validation():
+    assert _normalize_patient_name_style(" Feminine ") == "feminine"
+    assert _normalize_patient_name_style("neutral") is None
+    assert _normalize_patient_name_style("") is None
+
+    with pytest.raises(ValueError, match="patient_name_style"):
+        _normalize_patient_name_style("unknown")
+
+
+def test_patient_name_style_fallback_pools_are_style_specific(monkeypatch):
+    monkeypatch.setattr(
+        "project_phi.patient_names._stable_patient_name_identity_from_faker",
+        lambda *_args, **_kwargs: None,
+    )
+
+    feminine = _stable_patient_name_identity(
+        patient_id="Patient/synth-name-style-fallback-001",
+        secret=b"synthetic-secret",
+        name_style="feminine",
+    )
+    masculine = _stable_patient_name_identity(
+        patient_id="Patient/synth-name-style-fallback-001",
+        secret=b"synthetic-secret",
+        name_style="masculine",
+    )
+
+    assert feminine["given"] in _FAKE_FEMININE_GIVEN_NAMES
+    assert masculine["given"] in _FAKE_MASCULINE_GIVEN_NAMES
+    assert feminine["patient_name_style"] == "feminine"
+    assert masculine["patient_name_style"] == "masculine"
 
 
 def test_stable_patient_name_full_alias_uses_project_replacement_and_offsets():
@@ -56,6 +128,26 @@ def test_stable_patient_name_full_alias_uses_project_replacement_and_offsets():
         assert "pydeid_surrogate_end" in span.metadata
         assert span.metadata["project_name_policy"] == "known_patient_alias"
         assert span.metadata["name_role"] == "known_patient_alias"
+
+
+def test_stable_patient_name_style_is_audited_when_explicit():
+    note = "Patient Zylanda Qorven attended."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-name-style-003",
+        stable_patient_name_surrogates=True,
+        patient_aliases=["Zylanda Qorven"],
+        patient_name_style="feminine",
+        patient_name_secret="synthetic-secret",
+    )
+
+    stable_spans = _stable_patient_name_spans(result)
+    assert result.metadata["patient_name_style"] == "feminine"
+    assert stable_spans
+    assert {span.metadata["patient_name_style"] for span in stable_spans} == {
+        "feminine"
+    }
 
 
 def test_stable_patient_name_residual_alias_replaces_when_pydeid_emits_no_span(monkeypatch):

@@ -33,6 +33,28 @@ _FAKE_GIVEN_NAMES = [
     "Taylor",
 ]
 
+_FAKE_FEMININE_GIVEN_NAMES = [
+    "Amelia",
+    "Claire",
+    "Evelyn",
+    "Hannah",
+    "Julia",
+    "Maya",
+    "Nora",
+    "Sophie",
+]
+
+_FAKE_MASCULINE_GIVEN_NAMES = [
+    "Adam",
+    "Daniel",
+    "Ethan",
+    "Jacob",
+    "Lucas",
+    "Noah",
+    "Owen",
+    "Thomas",
+]
+
 _FAKE_FAMILY_NAMES = [
     "Bennett",
     "Fraser",
@@ -47,6 +69,7 @@ _FAKE_FAMILY_NAMES = [
 _FAKER_LOCALE = "en_CA"
 
 _NAME_TITLES = {"mr", "mrs", "ms", "miss", "mx", "m", "mme", "mlle"}
+_PATIENT_NAME_STYLES = {"feminine", "masculine", "neutral"}
 
 
 def _resolve_patient_name_secret(
@@ -81,6 +104,7 @@ def _stable_patient_name_identity(
     *,
     patient_id: str | None,  # Stable patient key for deterministic fake identity.
     secret: bytes,  # HMAC key bytes.
+    name_style: str | None = None,  # Optional explicit fake given-name style.
 ) -> dict[str, str]:
     """Generate one deterministic fake identity for the patient key.
 
@@ -99,24 +123,34 @@ def _stable_patient_name_identity(
         f"patient-name|{patient_id}".encode("utf-8"),
         hashlib.sha256,
     ).digest()
-    identity = _stable_patient_name_identity_from_faker(digest)
+    normalized_style = _normalize_patient_name_style(name_style)
+    identity = _stable_patient_name_identity_from_faker(
+        digest,
+        name_style=normalized_style,
+    )
     if identity is not None:
         return identity
 
-    given = _FAKE_GIVEN_NAMES[int.from_bytes(digest[:8], "big") % len(_FAKE_GIVEN_NAMES)]
+    given_pool = _fallback_given_name_pool(normalized_style)
+    given = given_pool[int.from_bytes(digest[:8], "big") % len(given_pool)]
     family = _FAKE_FAMILY_NAMES[int.from_bytes(digest[8:16], "big") % len(_FAKE_FAMILY_NAMES)]
-    return {"given": given, "family": family, "full": f"{given} {family}"}
+    identity = {"given": given, "family": family, "full": f"{given} {family}"}
+    if normalized_style is not None:
+        identity["patient_name_style"] = normalized_style
+    return identity
 
 
 def _stable_patient_name_identity_from_faker(
     digest: bytes,  # Patient/secret HMAC digest used only to seed Faker.
+    *,
+    name_style: str | None = None,  # Optional explicit fake given-name style.
 ) -> dict[str, str] | None:
     """Return deterministic Faker name components, or `None` for fallback pools.
 
     The Faker dependency is provided transitively by pyDeid in supported
-    environments. This helper avoids global Faker seeding and intentionally
-    does not infer or preserve gender from aliases, notes, diagnoses, or
-    pronouns.
+    environments. This helper avoids global Faker seeding. It never infers
+    style from aliases, notes, diagnoses, or pronouns; `name_style` must be
+    explicit caller metadata.
     """
 
     try:
@@ -132,14 +166,51 @@ def _stable_patient_name_identity_from_faker(
 
     try:
         fake.seed_instance(seed)
-        given = str(fake.first_name()).strip()
+        given = _faker_given_name(fake, name_style)
         family = str(fake.last_name()).strip()
     except Exception:
         return None
 
     if not given or not family:
         return None
-    return {"given": given, "family": family, "full": f"{given} {family}"}
+    identity = {"given": given, "family": family, "full": f"{given} {family}"}
+    if name_style is not None:
+        identity["patient_name_style"] = name_style
+    return identity
+
+
+def _normalize_patient_name_style(
+    name_style: str | None,  # Explicit name-style value from caller or manifest.
+) -> str | None:
+    """Validate optional fake patient given-name style metadata."""
+    if name_style is None:
+        return None
+    normalized = str(name_style).strip().casefold()
+    if not normalized:
+        return None
+    if normalized not in _PATIENT_NAME_STYLES:
+        raise ValueError(
+            "patient_name_style must be one of: feminine, masculine, neutral."
+        )
+    return None if normalized == "neutral" else normalized
+
+
+def _faker_given_name(fake, name_style: str | None) -> str:
+    """Return a Faker given name for the requested explicit style."""
+    if name_style == "feminine" and hasattr(fake, "first_name_female"):
+        return str(fake.first_name_female()).strip()
+    if name_style == "masculine" and hasattr(fake, "first_name_male"):
+        return str(fake.first_name_male()).strip()
+    return str(fake.first_name()).strip()
+
+
+def _fallback_given_name_pool(name_style: str | None) -> list[str]:
+    """Return the emergency fallback given-name pool for the style."""
+    if name_style == "feminine":
+        return _FAKE_FEMININE_GIVEN_NAMES
+    if name_style == "masculine":
+        return _FAKE_MASCULINE_GIVEN_NAMES
+    return _FAKE_GIVEN_NAMES
 
 
 def _build_patient_alias_profile(

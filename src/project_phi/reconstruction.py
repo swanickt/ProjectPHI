@@ -959,7 +959,12 @@ def _project_replacement_for_span(
                 if span.source == "ProjectPHI.residual_alias"
                 else "project_stable_patient_name"
             )
-            return replacement_text, replacement_source, match_type, {}
+            metadata = {}
+            if patient_name_identity.get("patient_name_style"):
+                metadata["patient_name_style"] = patient_name_identity[
+                    "patient_name_style"
+                ]
+            return replacement_text, replacement_source, match_type, metadata
 
     if (
         provider_name_alias_profile is not None

@@ -198,6 +198,30 @@ def test_patient_batch_known_patient_alias_wins_over_unknown_registry(monkeypatc
     assert span.metadata["project_name_policy"] == "known_patient_alias"
 
 
+def test_patient_batch_known_patient_alias_accepts_name_style(monkeypatch):
+    note = {"note_id": "n1", "note_text": "Maria Lopez called."}
+    mapping = {"Maria Lopez called.": [_name_span("Maria Lopez called.", "Maria Lopez")]}
+    monkeypatch.setattr(
+        "project_phi.patient_batch.deidentify_note",
+        _fake_deidentify_note_for(mapping),
+    )
+
+    batch = deidentify_patient_notes(
+        [note],
+        patient_id="patient-1",
+        stable_patient_name_surrogates=True,
+        patient_aliases=["Maria Lopez"],
+        patient_name_style="feminine",
+        patient_name_secret=PATIENT_SECRET,
+        stable_unknown_name_surrogates=True,
+        unknown_name_secret=UNKNOWN_SECRET,
+    )
+
+    span = batch.results[0].spans[0]
+    assert span.metadata["replacement_source"] == "project_stable_patient_name"
+    assert span.metadata["patient_name_style"] == "feminine"
+
+
 def test_patient_batch_semantic_veto_wins_over_unknown_registry(monkeypatch):
     note = {"note_id": "n1", "note_text": "Hamilton Depression Scale was elevated."}
     mapping = {

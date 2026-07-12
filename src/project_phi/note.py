@@ -19,6 +19,7 @@ from .normalization import normalize_surrogates
 from .patient_names import (
     _build_patient_alias_profile,
     _merge_patient_alias_custom_names,
+    _normalize_patient_name_style,
     _requested_types_include_names,
     _residual_patient_alias_spans,
     _resolve_patient_name_secret,
@@ -58,6 +59,7 @@ def deidentify_note(
     shift_partial_month_day_dates: bool = True,  # Stable shifting for Month Day spans.
     stable_patient_name_surrogates: bool = False,  # Enable explicit-alias patient names.
     patient_aliases: Iterable[str] | None = None,  # Explicit aliases for this patient.
+    patient_name_style: str | None = None,  # Optional explicit fake given-name style.
     patient_name_secret: str | bytes | None = None,  # Direct patient-name secret.
     patient_name_secret_env_var: str | None = None,  # Env var containing name secret.
     stable_provider_name_surrogates: bool = False,  # Enable explicit-provider aliases.
@@ -116,7 +118,9 @@ def deidentify_note(
 
     patient_name_alias_profile = None
     patient_name_identity = None
+    normalized_patient_name_style = None
     if stable_patient_name_surrogates:
+        normalized_patient_name_style = _normalize_patient_name_style(patient_name_style)
         patient_name_secret_bytes = _resolve_patient_name_secret(
             patient_name_secret,
             patient_name_secret_env_var,
@@ -125,6 +129,7 @@ def deidentify_note(
         patient_name_identity = _stable_patient_name_identity(
             patient_id=patient_id,
             secret=patient_name_secret_bytes,
+            name_style=normalized_patient_name_style,
         )
         custom_patient_first_names, custom_patient_last_names = _merge_patient_alias_custom_names(
             patient_name_alias_profile,
@@ -169,6 +174,7 @@ def deidentify_note(
             shift_partial_month_day_dates if stable_date_shift else False
         ),
         "stable_patient_name_surrogates": stable_patient_name_surrogates,
+        "patient_name_style": normalized_patient_name_style,
         "stable_provider_name_surrogates": stable_provider_name_surrogates,
         "custom_regex_rule_ids": [
             item["custom_regex_rule_id"] for item in custom_regex_metadata.values()

@@ -17,6 +17,7 @@ modules. The objects exported here are the supported Python API:
 from .csv_adapter import deidentify_csv
 from .config_loaders import (
     load_patient_alias_manifest,
+    load_patient_alias_manifest_with_styles,
     load_protected_clinical_terms_csv,
     load_provider_alias_manifest,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "deidentify_patient_notes",
     "get_patient_date_shift",
     "load_patient_alias_manifest",
+    "load_patient_alias_manifest_with_styles",
     "load_protected_clinical_terms_csv",
     "load_provider_alias_manifest",
 ]

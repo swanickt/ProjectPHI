@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .custom_regex import _build_pydeid_custom_regexes
+from .patient_names import _normalize_patient_name_style
 from .protected_terms import _build_protected_terms_profile
 
 
@@ -50,6 +51,58 @@ def load_patient_alias_manifest(
             aliases_by_patient_id.setdefault(patient_id, []).append(alias)
 
     return aliases_by_patient_id
+
+
+def load_patient_alias_manifest_with_styles(
+    path,  # CSV path with patient_id,alias and optional name_style columns.
+    *,
+    encoding="utf-8",  # File encoding for the manifest.
+) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """Load patient aliases plus optional explicit fake-name styles.
+
+    The required columns remain `patient_id` and `alias`; `name_style` is
+    optional and may contain `feminine`, `masculine`, or `neutral`. Missing or
+    neutral style preserves the default fake-name behavior. Non-empty
+    styles must be consistent for every row with the same `patient_id`.
+    """
+
+    aliases_by_patient_id: dict[str, list[str]] = {}
+    styles_by_patient_id: dict[str, str] = {}
+    with open(Path(path), newline="", encoding=encoding) as handle:
+        reader = csv.DictReader(handle)
+        fieldnames = reader.fieldnames or []
+        required_columns = {"patient_id", "alias"}
+        missing_columns = sorted(required_columns.difference(fieldnames))
+        if missing_columns:
+            raise ValueError("Alias manifest is missing required columns.")
+
+        for row_number, row in enumerate(reader, start=2):
+            if _blank_csv_row(row):
+                continue
+            patient_id = (row.get("patient_id") or "").strip()
+            alias = (row.get("alias") or "").strip()
+            if not patient_id:
+                raise ValueError(f"Alias manifest row {row_number} has an empty patient_id.")
+            if not alias:
+                raise ValueError(f"Alias manifest row {row_number} has an empty alias.")
+            aliases_by_patient_id.setdefault(patient_id, []).append(alias)
+
+            try:
+                style = _normalize_patient_name_style(row.get("name_style"))
+            except ValueError as exc:
+                raise ValueError(
+                    f"Alias manifest row {row_number} has invalid name_style."
+                ) from exc
+            if style is None:
+                continue
+            previous_style = styles_by_patient_id.get(patient_id)
+            if previous_style is not None and previous_style != style:
+                raise ValueError(
+                    f"Alias manifest row {row_number} has conflicting name_style."
+                )
+            styles_by_patient_id[patient_id] = style
+
+    return aliases_by_patient_id, styles_by_patient_id
 
 
 def load_provider_alias_manifest(

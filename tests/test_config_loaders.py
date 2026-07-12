@@ -7,6 +7,7 @@ import pytest
 from project_phi.config_loaders import (
     load_custom_regexes_json,
     load_patient_alias_manifest,
+    load_patient_alias_manifest_with_styles,
     load_protected_clinical_terms_csv,
     load_provider_alias_manifest,
 )
@@ -27,6 +28,69 @@ def test_load_patient_alias_manifest_valid_synthetic_csv(tmp_path):
         "Patient/synth-001": ["Zylanda Qorven", "Zylanda"],
         "Patient/synth-002": ["Marlo Venn"],
     }
+
+
+def test_load_patient_alias_manifest_with_styles_accepts_optional_style(tmp_path):
+    manifest = tmp_path / "aliases.csv"
+    manifest.write_text(
+        "patient_id,alias,name_style\n"
+        "Patient/synth-001,Zylanda Qorven,Feminine\n"
+        "Patient/synth-001,Zylanda,feminine\n"
+        "Patient/synth-002,Marlo Venn,neutral\n"
+        "Patient/synth-003,Casey Rowan,\n",
+        encoding="utf-8",
+    )
+
+    aliases, styles = load_patient_alias_manifest_with_styles(manifest)
+
+    assert aliases == {
+        "Patient/synth-001": ["Zylanda Qorven", "Zylanda"],
+        "Patient/synth-002": ["Marlo Venn"],
+        "Patient/synth-003": ["Casey Rowan"],
+    }
+    assert styles == {"Patient/synth-001": "feminine"}
+
+
+def test_load_patient_alias_manifest_with_styles_accepts_two_column_manifest(tmp_path):
+    manifest = tmp_path / "aliases.csv"
+    manifest.write_text(
+        "patient_id,alias\nPatient/synth-001,Zylanda Qorven\n",
+        encoding="utf-8",
+    )
+
+    aliases, styles = load_patient_alias_manifest_with_styles(manifest)
+
+    assert aliases == {"Patient/synth-001": ["Zylanda Qorven"]}
+    assert styles == {}
+
+
+def test_load_patient_alias_manifest_with_styles_rejects_invalid_style_safely(tmp_path):
+    manifest = tmp_path / "aliases.csv"
+    manifest.write_text(
+        "patient_id,alias,name_style\nPatient/synth-001,Zylanda Qorven,unknown\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="row 2") as exc_info:
+        load_patient_alias_manifest_with_styles(manifest)
+
+    assert "Zylanda" not in str(exc_info.value)
+    assert "unknown" not in str(exc_info.value)
+
+
+def test_load_patient_alias_manifest_with_styles_rejects_conflicting_style(tmp_path):
+    manifest = tmp_path / "aliases.csv"
+    manifest.write_text(
+        "patient_id,alias,name_style\n"
+        "Patient/synth-001,Zylanda Qorven,feminine\n"
+        "Patient/synth-001,Zylanda,masculine\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="row 3") as exc_info:
+        load_patient_alias_manifest_with_styles(manifest)
+
+    assert "Zylanda" not in str(exc_info.value)
 
 
 def test_load_patient_alias_manifest_rejects_missing_columns(tmp_path):

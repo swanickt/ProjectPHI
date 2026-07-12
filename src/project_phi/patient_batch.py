@@ -10,6 +10,7 @@ from .models import DeidentificationResult, PatientDeidentificationResult
 from .note import deidentify_note
 from .patient_names import (
     _build_patient_alias_profile,
+    _normalize_patient_name_style,
     _requested_types_include_names,
     _resolve_patient_name_secret,
     _stable_patient_name_identity,
@@ -42,6 +43,7 @@ def deidentify_patient_notes(
     shift_partial_month_day_dates: bool = True,
     stable_patient_name_surrogates: bool = False,
     patient_aliases: Iterable[str] | None = None,
+    patient_name_style: str | None = None,
     patient_name_secret: str | bytes | None = None,
     patient_name_secret_env_var: str | None = None,
     stable_provider_name_surrogates: bool = False,
@@ -69,6 +71,10 @@ def deidentify_patient_notes(
     """
     if not patient_id:
         raise ValueError("deidentify_patient_notes(...) requires a nonempty patient_id.")
+
+    normalized_patient_name_style = None
+    if stable_patient_name_surrogates:
+        normalized_patient_name_style = _normalize_patient_name_style(patient_name_style)
 
     requested_types = list(types) if types is not None else None
     if stable_unknown_name_surrogates and requested_types is not None:
@@ -99,6 +105,7 @@ def deidentify_patient_notes(
             shift_partial_month_day_dates=shift_partial_month_day_dates,
             stable_patient_name_surrogates=stable_patient_name_surrogates,
             patient_aliases=patient_aliases,
+            patient_name_style=normalized_patient_name_style,
             patient_name_secret=patient_name_secret,
             patient_name_secret_env_var=patient_name_secret_env_var,
             stable_provider_name_surrogates=stable_provider_name_surrogates,
@@ -157,6 +164,7 @@ def deidentify_patient_notes(
         patient_name_identity = _stable_patient_name_identity(
             patient_id=patient_id,
             secret=patient_name_secret_bytes,
+            name_style=normalized_patient_name_style,
         )
 
     provider_name_alias_profile = None

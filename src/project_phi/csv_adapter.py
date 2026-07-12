@@ -43,6 +43,7 @@ def deidentify_csv(
     shift_partial_month_day_dates: bool = True,  # Month Day date shifting.
     stable_patient_name_surrogates: bool = False,  # Enable explicit-alias patient names.
     patient_aliases_by_patient_id: dict[str, Iterable[str]] | None = None,  # Row alias lookup.
+    patient_name_styles_by_patient_id: dict[str, str] | None = None,  # Optional style lookup.
     patient_name_secret: str | bytes | None = None,  # Direct patient-name secret.
     patient_name_secret_env_var: str | None = None,  # Env var containing name secret.
     stable_provider_name_surrogates: bool = False,  # Enable explicit-provider aliases.
@@ -153,6 +154,7 @@ def deidentify_csv(
                         shift_partial_month_day_dates=shift_partial_month_day_dates,
                         stable_patient_name_surrogates=stable_patient_name_surrogates,
                         patient_aliases_by_patient_id=patient_aliases_by_patient_id,
+                        patient_name_styles_by_patient_id=patient_name_styles_by_patient_id,
                         patient_name_secret=patient_name_secret,
                         patient_name_secret_env_var=patient_name_secret_env_var,
                         stable_provider_name_surrogates=stable_provider_name_surrogates,
@@ -181,6 +183,10 @@ def deidentify_csv(
                             patient_aliases_by_patient_id,
                             stable_patient_name_surrogates=stable_patient_name_surrogates,
                         )
+                        patient_name_style = _patient_name_style_for_row(
+                            patient_id,
+                            patient_name_styles_by_patient_id,
+                        )
                         result = deidentify_note(
                             row.get(note_text_column) or "",
                             patient_id=patient_id,
@@ -200,6 +206,7 @@ def deidentify_csv(
                             shift_partial_month_day_dates=shift_partial_month_day_dates,
                             stable_patient_name_surrogates=stable_patient_name_surrogates,
                             patient_aliases=patient_aliases,
+                            patient_name_style=patient_name_style,
                             patient_name_secret=patient_name_secret,
                             patient_name_secret_env_var=patient_name_secret_env_var,
                             stable_provider_name_surrogates=stable_provider_name_surrogates,
@@ -295,6 +302,7 @@ def _deidentify_csv_grouped_by_patient(
     shift_partial_month_day_dates: bool,
     stable_patient_name_surrogates: bool,
     patient_aliases_by_patient_id: dict[str, Iterable[str]] | None,
+    patient_name_styles_by_patient_id: dict[str, str] | None,
     patient_name_secret: str | bytes | None,
     patient_name_secret_env_var: str | None,
     stable_provider_name_surrogates: bool,
@@ -339,6 +347,10 @@ def _deidentify_csv_grouped_by_patient(
                 patient_aliases_by_patient_id,
                 stable_patient_name_surrogates=stable_patient_name_surrogates,
             )
+            patient_name_style = _patient_name_style_for_row(
+                patient_id,
+                patient_name_styles_by_patient_id,
+            )
             batch = deidentify_patient_notes(
                 [
                     {
@@ -368,6 +380,7 @@ def _deidentify_csv_grouped_by_patient(
                 shift_partial_month_day_dates=shift_partial_month_day_dates,
                 stable_patient_name_surrogates=stable_patient_name_surrogates,
                 patient_aliases=patient_aliases,
+                patient_name_style=patient_name_style,
                 patient_name_secret=patient_name_secret,
                 patient_name_secret_env_var=patient_name_secret_env_var,
                 stable_provider_name_surrogates=stable_provider_name_surrogates,
@@ -531,3 +544,13 @@ def _patient_aliases_for_row(
     if not aliases:
         raise ValueError("stable_patient_name_surrogates=True requires aliases for patient_id.")
     return aliases
+
+
+def _patient_name_style_for_row(
+    patient_id: str | None,
+    patient_name_styles_by_patient_id: dict[str, str] | None,
+) -> str | None:
+    """Return optional explicit fake-name style for this patient."""
+    if not patient_id or patient_name_styles_by_patient_id is None:
+        return None
+    return patient_name_styles_by_patient_id.get(patient_id)

@@ -53,6 +53,7 @@ from .models import PHISpan
 # - project_name_policy: Patient-name handling policy applied to this span, if any.
 # - name_role: Name role/provenance, such as patient, doctor, or alias, when known.
 # - alias_match_type: How a configured alias matched the detected span, when applicable.
+# - patient_name_style: Optional caller-supplied fake patient given-name style.
 # - custom_regex_rule_id: ProjectPHI custom regex rule ID responsible for this span.
 # - custom_regex_phi_type: Configured custom regex phi_type associated with this span.
 # - project_protected_term_policy: Protected-term handling policy applied to this span.
@@ -112,6 +113,7 @@ AUDIT_COLUMNS = [
     "project_name_policy",
     "name_role",
     "alias_match_type",
+    "patient_name_style",
     "custom_regex_rule_id",
     "custom_regex_phi_type",
     "project_protected_term_policy",
@@ -194,6 +196,7 @@ def _span_to_audit_row(
         "project_name_policy": span.metadata.get("project_name_policy"),
         "name_role": span.metadata.get("name_role"),
         "alias_match_type": span.metadata.get("alias_match_type"),
+        "patient_name_style": span.metadata.get("patient_name_style"),
         "custom_regex_rule_id": span.metadata.get("custom_regex_rule_id"),
         "custom_regex_phi_type": span.metadata.get("custom_regex_phi_type"),
         "project_protected_term_policy": span.metadata.get("project_protected_term_policy"),

@@ -194,10 +194,11 @@ deterministic Faker seeded from patient_id and the patient-name secret.
 ProjectPHI prefers Faker's Canadian English locale (en_CA) for these stable
 patient-name surrogates, falls back to Faker's default locale if that locale is
 not available, and uses the tiny in-source name pools only as an emergency
-fallback. The wrapper does not infer gender from the original alias, note text,
-diagnosis, or pronouns. Exact fake names may vary if the runtime Faker
-version/provider data changes, so deployments that require byte-for-byte stable
-surrogates should pin their environment.
+fallback. Callers may provide explicit `feminine`, `masculine`, or `neutral`
+fake given-name style metadata. The wrapper does not infer style from the
+original alias, note text, diagnosis, or pronouns. Exact fake names may vary if
+the runtime Faker version/provider data changes, so deployments that require
+byte-for-byte stable surrogates should pin their environment.
 
 Residual alias replacements are audited with
 `replacement_source="project_residual_patient_alias"` and

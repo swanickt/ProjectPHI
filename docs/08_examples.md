@@ -106,6 +106,7 @@ Configuration:
 patient_id="Patient/synthetic-002"
 stable_patient_name_surrogates=True
 patient_aliases=["Zylanda Qorven", "Zylanda"]
+patient_name_style="feminine"  # optional explicit fake-name style metadata
 patient_name_secret_env_var="PROJECT_PHI_PATIENT_NAME_SECRET"
 custom_dr_first_names={"Arlen"}
 custom_dr_last_names={"Pavo"}
@@ -137,6 +138,7 @@ replacement_source="project_stable_patient_name"
 project_name_policy="known_patient_alias"
 name_role="known_patient_alias"
 alias_match_type="full" or "given"
+patient_name_style="feminine"  # only when explicit non-neutral style is supplied
 ```
 
 If pyDeid prunes a supplied alias before ProjectPHI sees it, the residual span

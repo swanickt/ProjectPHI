@@ -37,7 +37,6 @@ Key pages:
 - [Privacy and audit notes](docs/06_privacy_and_audit_notes.md)
 - [Semantic preservation](docs/07_semantic_preservation.md)
 - [Examples](docs/08_examples.md)
-- [Current limitations](docs/09_current_limitations.md)
 
 ## Current Capabilities
 
@@ -55,7 +54,9 @@ Key pages:
   shifting.
 - Stable patient-name surrogates for explicit patient aliases, including a
   bounded exact residual pass for supplied aliases that pyDeid prunes before
-  ProjectPHI sees them.
+  ProjectPHI sees them. Callers may optionally provide explicit
+  feminine/masculine/neutral fake-name style metadata; ProjectPHI does not
+  infer it from notes.
 - Stable provider-name surrogates for explicit governed provider aliases,
   including role-guarded residual matching for single-token aliases.
 - Optional patient-local stable unknown-name surrogates for Python batch and

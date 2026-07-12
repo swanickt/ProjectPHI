@@ -110,10 +110,11 @@ clinician names, family names, copied-correspondence names, facilities, and
 organizations are not inferred as patient aliases.
 
 For explicit patient aliases, the project uses a deterministic Faker-generated
-fake identity keyed by `patient_id` and a runtime secret. The replacement is
-role-preserving but not gender-concordant: the wrapper does not infer gender
-from breast oncology context, names, pronouns, or diagnosis because that would
-add an unvalidated inference layer and can create incorrect assumptions.
+fake identity keyed by `patient_id` and a runtime secret. Callers may provide
+explicit `feminine`, `masculine`, or `neutral` fake-name style metadata. The
+wrapper does not infer style from breast oncology context, names, pronouns, or
+diagnosis because that would add an unvalidated inference layer and can create
+incorrect assumptions.
 
 `deidentify_patient_notes(...)` can additionally stabilize remaining unknown
 pyDeid name spans within one patient's supplied notes. This batch mode

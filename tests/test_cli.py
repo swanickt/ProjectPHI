@@ -8,8 +8,11 @@ from conftest import _read_csv, _write_csv
 
 
 def _write_alias_manifest(path, rows):
+    fieldnames = ["patient_id", "alias"]
+    if any("name_style" in row for row in rows):
+        fieldnames.append("name_style")
     with open(path, "w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["patient_id", "alias"])
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -216,6 +219,65 @@ def test_cli_stable_patient_name_surrogates_load_alias_manifest(tmp_path, monkey
     assert "Zylanda" not in captured.out
     assert "Qorven" not in captured.out
     assert "synthetic-name-secret" not in captured.out
+
+
+def test_cli_stable_patient_name_surrogates_loads_name_style(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    audit_file = tmp_path / "audit.csv"
+    manifest = tmp_path / "aliases.csv"
+    monkeypatch.setenv("PROJECT_PHI_TEST_CLI_NAME_SECRET", "synthetic-name-secret")
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-cli-name-style-001",
+                "note_id": "Note/synth-cli-name-style-001",
+                "note_text": "Patient Zylanda Qorven attended.",
+            }
+        ],
+    )
+    _write_alias_manifest(
+        manifest,
+        [
+            {
+                "patient_id": "Patient/synth-cli-name-style-001",
+                "alias": "Zylanda Qorven",
+                "name_style": "feminine",
+            }
+        ],
+    )
+
+    exit_code = main(
+        [
+            str(input_file),
+            str(output_file),
+            "--audit-output-file",
+            str(audit_file),
+            "--stable-patient-name-surrogates",
+            "--patient-alias-manifest",
+            str(manifest),
+            "--patient-name-secret-env-var",
+            "PROJECT_PHI_TEST_CLI_NAME_SECRET",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    audit_rows = _read_csv(audit_file)
+    stable_rows = [
+        row
+        for row in audit_rows
+        if row["replacement_source"] == "project_stable_patient_name"
+    ]
+    assert exit_code == 0
+    assert stable_rows
+    assert {row["patient_name_style"] for row in stable_rows} == {"feminine"}
+    assert "Zylanda" not in captured.out
+    assert "feminine" not in captured.out
 
 
 def test_cli_stable_provider_name_surrogates_load_provider_manifest(

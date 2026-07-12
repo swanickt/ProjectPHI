@@ -84,8 +84,8 @@ def test_deidentify_csv_stable_unknown_names_groups_by_patient_and_preserves_ord
     output_rows = _read_csv(output_file)
     assert [row["note_text"] for row in output_rows] == ["p2:n3", "p1:n1", "p1:n2"]
     assert calls == [
-        ("p2", ["n3"], {"include_original_text": False, "types": None, "custom_dr_first_names": None, "custom_dr_last_names": None, "custom_patient_first_names": None, "custom_patient_last_names": None, "named_entity_recognition": False, "stable_date_shift": False, "date_shift_secret": None, "date_shift_secret_env_var": None, "date_shift_days": 45, "shift_partial_month_day_dates": True, "stable_patient_name_surrogates": False, "patient_aliases": None, "patient_name_secret": None, "patient_name_secret_env_var": None, "stable_provider_name_surrogates": False, "provider_aliases_by_provider_id": None, "provider_name_secret": None, "provider_name_secret_env_var": None, "stable_unknown_name_surrogates": True, "unknown_name_secret": "synthetic-secret", "unknown_name_secret_env_var": None, "custom_regexes": None, "protected_clinical_terms": None, "include_builtin_protected_clinical_terms": True}),
-        ("p1", ["n1", "n2"], {"include_original_text": False, "types": None, "custom_dr_first_names": None, "custom_dr_last_names": None, "custom_patient_first_names": None, "custom_patient_last_names": None, "named_entity_recognition": False, "stable_date_shift": False, "date_shift_secret": None, "date_shift_secret_env_var": None, "date_shift_days": 45, "shift_partial_month_day_dates": True, "stable_patient_name_surrogates": False, "patient_aliases": None, "patient_name_secret": None, "patient_name_secret_env_var": None, "stable_provider_name_surrogates": False, "provider_aliases_by_provider_id": None, "provider_name_secret": None, "provider_name_secret_env_var": None, "stable_unknown_name_surrogates": True, "unknown_name_secret": "synthetic-secret", "unknown_name_secret_env_var": None, "custom_regexes": None, "protected_clinical_terms": None, "include_builtin_protected_clinical_terms": True}),
+        ("p2", ["n3"], {"include_original_text": False, "types": None, "custom_dr_first_names": None, "custom_dr_last_names": None, "custom_patient_first_names": None, "custom_patient_last_names": None, "named_entity_recognition": False, "stable_date_shift": False, "date_shift_secret": None, "date_shift_secret_env_var": None, "date_shift_days": 45, "shift_partial_month_day_dates": True, "stable_patient_name_surrogates": False, "patient_aliases": None, "patient_name_style": None, "patient_name_secret": None, "patient_name_secret_env_var": None, "stable_provider_name_surrogates": False, "provider_aliases_by_provider_id": None, "provider_name_secret": None, "provider_name_secret_env_var": None, "stable_unknown_name_surrogates": True, "unknown_name_secret": "synthetic-secret", "unknown_name_secret_env_var": None, "custom_regexes": None, "protected_clinical_terms": None, "include_builtin_protected_clinical_terms": True}),
+        ("p1", ["n1", "n2"], {"include_original_text": False, "types": None, "custom_dr_first_names": None, "custom_dr_last_names": None, "custom_patient_first_names": None, "custom_patient_last_names": None, "named_entity_recognition": False, "stable_date_shift": False, "date_shift_secret": None, "date_shift_secret_env_var": None, "date_shift_days": 45, "shift_partial_month_day_dates": True, "stable_patient_name_surrogates": False, "patient_aliases": None, "patient_name_style": None, "patient_name_secret": None, "patient_name_secret_env_var": None, "stable_provider_name_surrogates": False, "provider_aliases_by_provider_id": None, "provider_name_secret": None, "provider_name_secret_env_var": None, "stable_unknown_name_surrogates": True, "unknown_name_secret": "synthetic-secret", "unknown_name_secret_env_var": None, "custom_regexes": None, "protected_clinical_terms": None, "include_builtin_protected_clinical_terms": True}),
     ]
     assert summary["rows_read"] == 3
     assert summary["rows_written"] == 3
@@ -405,6 +405,89 @@ def test_deidentify_csv_stable_patient_names_use_row_specific_aliases(tmp_path):
     assert summary["rows_failed"] == 0
     assert "Zylanda" not in output_rows[0]["note_text"]
     assert "Qorven" not in output_rows[0]["note_text"]
+
+
+def test_deidentify_csv_stable_patient_names_uses_row_specific_name_style(tmp_path):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    audit_file = tmp_path / "audit.csv"
+    rows = [
+        {
+            "patient_id": "Patient/synth-csv-name-style-001",
+            "note_id": "Note/synth-csv-name-style-001",
+            "note_text": "Patient Zylanda Qorven attended.",
+        }
+    ]
+    _write_csv(input_file, rows)
+
+    summary = deidentify_csv(
+        input_file,
+        output_file,
+        audit_output_file=audit_file,
+        stable_patient_name_surrogates=True,
+        patient_aliases_by_patient_id={
+            "Patient/synth-csv-name-style-001": ["Zylanda Qorven"]
+        },
+        patient_name_styles_by_patient_id={"Patient/synth-csv-name-style-001": "feminine"},
+        patient_name_secret="synthetic-secret",
+    )
+
+    audit_rows = _read_csv(audit_file)
+    stable_rows = [
+        row
+        for row in audit_rows
+        if row["replacement_source"] == "project_stable_patient_name"
+    ]
+    assert summary["rows_failed"] == 0
+    assert stable_rows
+    assert {row["patient_name_style"] for row in stable_rows} == {"feminine"}
+
+
+def test_deidentify_csv_grouped_patient_names_passes_name_style(tmp_path, monkeypatch):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    rows = [
+        {
+            "patient_id": "Patient/synth-csv-name-style-002",
+            "note_id": "Note/synth-csv-name-style-002",
+            "note_text": "Patient Zylanda Qorven attended.",
+        }
+    ]
+    _write_csv(input_file, rows)
+    calls = []
+
+    def fake_batch(notes, *, patient_id, **kwargs):
+        calls.append((patient_id, kwargs["patient_name_style"]))
+        return PatientDeidentificationResult(
+            patient_id=patient_id,
+            results=[
+                DeidentificationResult(
+                    original_text=None,
+                    deidentified_text="done",
+                    spans=[],
+                    warnings=[],
+                    metadata={"patient_id": patient_id, "note_id": notes[0]["note_id"]},
+                )
+            ],
+        )
+
+    monkeypatch.setattr(csv_adapter, "deidentify_patient_notes", fake_batch)
+
+    summary = deidentify_csv(
+        input_file,
+        output_file,
+        stable_unknown_name_surrogates=True,
+        unknown_name_secret="synthetic-unknown-secret",
+        stable_patient_name_surrogates=True,
+        patient_aliases_by_patient_id={
+            "Patient/synth-csv-name-style-002": ["Zylanda Qorven"]
+        },
+        patient_name_styles_by_patient_id={"Patient/synth-csv-name-style-002": "masculine"},
+        patient_name_secret="synthetic-name-secret",
+    )
+
+    assert summary["rows_failed"] == 0
+    assert calls == [("Patient/synth-csv-name-style-002", "masculine")]
 
 def test_deidentify_csv_stable_patient_names_residual_aliases_are_audited(
     tmp_path, monkeypatch

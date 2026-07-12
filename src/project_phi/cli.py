@@ -13,7 +13,7 @@ import sys
 
 from .config_loaders import (
     load_custom_regexes_json,
-    load_patient_alias_manifest,
+    load_patient_alias_manifest_with_styles,
     load_provider_alias_manifest,
     load_protected_clinical_terms_csv,
 )
@@ -46,11 +46,16 @@ def main(
         return _argument_error("--stable-unknown-name-surrogates requires --unknown-name-secret-env-var")
 
     try:
-        patient_aliases_by_patient_id = (
-            load_patient_alias_manifest(args.patient_alias_manifest, encoding=args.encoding)
-            if args.patient_alias_manifest
-            else None
-        )
+        patient_aliases_by_patient_id = None
+        patient_name_styles_by_patient_id = None
+        if args.patient_alias_manifest:
+            (
+                patient_aliases_by_patient_id,
+                patient_name_styles_by_patient_id,
+            ) = load_patient_alias_manifest_with_styles(
+                args.patient_alias_manifest,
+                encoding=args.encoding,
+            )
         custom_regexes = (
             load_custom_regexes_json(args.custom_regex_json, encoding=args.encoding)
             if args.custom_regex_json
@@ -84,6 +89,7 @@ def main(
             shift_partial_month_day_dates=args.shift_partial_month_day_dates,
             stable_patient_name_surrogates=args.stable_patient_name_surrogates,
             patient_aliases_by_patient_id=patient_aliases_by_patient_id,
+            patient_name_styles_by_patient_id=patient_name_styles_by_patient_id,
             patient_name_secret_env_var=args.patient_name_secret_env_var,
             stable_provider_name_surrogates=args.stable_provider_name_surrogates,
             provider_aliases_by_provider_id=provider_aliases_by_provider_id,

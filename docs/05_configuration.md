@@ -23,6 +23,7 @@ deidentify_note(
     shift_partial_month_day_dates=True,
     stable_patient_name_surrogates=False,
     patient_aliases=None,
+    patient_name_style=None,
     patient_name_secret=None,
     patient_name_secret_env_var=None,
     stable_provider_name_surrogates=False,
@@ -67,12 +68,16 @@ deidentify_csv(
     shift_partial_month_day_dates=True,
     stable_patient_name_surrogates=False,
     patient_aliases_by_patient_id=None,
+    patient_name_styles_by_patient_id=None,
     patient_name_secret=None,
     patient_name_secret_env_var=None,
     stable_provider_name_surrogates=False,
     provider_aliases_by_provider_id=None,
     provider_name_secret=None,
     provider_name_secret_env_var=None,
+    stable_unknown_name_surrogates=False,
+    unknown_name_secret=None,
+    unknown_name_secret_env_var=None,
     custom_regexes=None,
     protected_clinical_terms=None,
     include_builtin_protected_clinical_terms=True,
@@ -239,6 +244,9 @@ Parameters:
 - `patient_id`: required
 - `patient_aliases`: required for `deidentify_note(...)`
 - `patient_aliases_by_patient_id`: required for `deidentify_csv(...)`
+- `patient_name_style`: optional for `deidentify_note(...)`; allowed values are
+  `feminine`, `masculine`, and `neutral`
+- `patient_name_styles_by_patient_id`: optional for `deidentify_csv(...)`
 - `patient_name_secret` or `patient_name_secret_env_var`: required
 
 Recommended environment variable:
@@ -255,6 +263,7 @@ result = deidentify_note(
     patient_id="Patient/synthetic-002",
     stable_patient_name_surrogates=True,
     patient_aliases=["Zylanda Qorven", "Zylanda"],
+    patient_name_style="feminine",
     patient_name_secret_env_var="PROJECT_PHI_PATIENT_NAME_SECRET",
 )
 ```
@@ -271,12 +280,15 @@ not search for arbitrary names.
 Matching aliases use one deterministic Faker-generated identity seeded from
 patient_id and the patient-name secret. ProjectPHI prefers Faker's Canadian
 English locale (en_CA), falls back to Faker's default locale if needed, and
-uses the small in-source name pools only as an emergency fallback. Unknown
-names remain pyDeid replacements unless the Python patient batch API explicitly
-enables patient-local unknown-name surrogates.
+uses the small in-source name pools only as an emergency fallback. Optional
+`patient_name_style` metadata affects the fake given-name style only. Missing
+or `neutral` style preserves the default behavior. Unknown names remain pyDeid
+replacements unless the Python patient batch API explicitly enables
+patient-local unknown-name surrogates.
 
-The project does not infer gender from aliases, note text, pronouns, diagnosis,
-or service line. Exact fake names may depend on the installed Faker
+The project does not infer name style from aliases, note text, pronouns,
+diagnosis, or service line. Treat style as governed formatting metadata, not as
+clinical truth. Exact fake names may depend on the installed Faker
 version/provider data, so pin the runtime environment if byte-for-byte stable
 surrogate names are required across deployments.
 
@@ -293,7 +305,7 @@ registration or demographics data:
 
 ```text
 structured patient table
-  -> alias manifest: patient_id, alias
+  -> alias manifest: patient_id, alias, optional name_style
   -> deidentify_csv(..., stable_patient_name_surrogates=True)
 ```
 
@@ -378,8 +390,19 @@ use the existing sanitized row-failure behavior.
 
 ### Alias Manifest CSV
 
-For CSV processing, aliases can be loaded from a small manifest with synthetic
-or governed runtime data:
+Patient alias manifests require `patient_id` and `alias`. They may also include
+optional `name_style` values: `feminine`, `masculine`, or `neutral`. Non-neutral
+styles must be consistent for all aliases for the same patient.
+
+```csv
+patient_id,alias,name_style
+Patient/synthetic-001,Zylanda Qorven,feminine
+Patient/synthetic-001,Zylanda,feminine
+Patient/synthetic-002,Casey Rowan,neutral
+```
+
+For CSV processing, aliases can also be loaded from a two-column manifest when
+no style metadata is needed:
 
 ```csv
 patient_id,alias
@@ -387,16 +410,17 @@ Patient/synthetic-002,Zylanda Qorven
 Patient/synthetic-002,Zylanda
 ```
 
-`load_patient_alias_manifest(path)` can be imported from
-`project_phi.config_loaders` and returns:
+`load_patient_alias_manifest(path)` returns aliases only:
 
 ```python
 {"Patient/synthetic-002": ["Zylanda Qorven", "Zylanda"]}
 ```
 
-The loader trims whitespace, preserves alias order per patient, skips completely
-blank rows, and rejects missing columns or empty values with sanitized row-number
-errors. It does not infer aliases or perform entity resolution.
+`load_patient_alias_manifest_with_styles(path)` returns
+`(aliases_by_patient_id, name_styles_by_patient_id)` and is what the CLI uses.
+Both loaders trim whitespace, preserve alias order per patient, skip completely
+blank rows, and reject missing columns or empty values with sanitized row-number
+errors. They do not infer aliases or perform entity resolution.
 
 ## Stable Provider-Name Surrogates
 
