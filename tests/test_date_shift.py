@@ -861,28 +861,76 @@ def test_reconstruction_preserves_pmhx_site_acronym_overlap():
     )
     assert final_span.metadata["project_clinical_abbreviation"] == "PMHx"
 
-def test_reconstruction_still_replaces_standalone_pmh_site_acronym():
-    note = "Transferred from PMH for review."
-    start = note.index("PMH")
-    span = PHISpan(
-        start=start,
-        end=start + len("PMH"),
-        text="PMH",
-        label="HOSPITAL",
-        source="pyDeid",
-        replacement="SMH",
-        pydeid_types=["Site Acronym"],
-        metadata={},
-    )
+def test_reconstruction_preserves_standalone_pmh_case_insensitive():
+    examples = [
+        ("PMH - breast cancer, degenerative spinal stenosis", "PMH"),
+        ("pmh: breast cancer, degenerative spinal stenosis", "pmh"),
+        ("Pmh includes breast cancer.", "Pmh"),
+        ("Transferred from PMH for review.", "PMH"),
+    ]
 
-    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_project_replacements(
-        note,
-        [span],
-    )
+    for note, token in examples:
+        start = note.index(token)
+        span = PHISpan(
+            start=start,
+            end=start + len(token),
+            text=token,
+            label="HOSPITAL",
+            source="pyDeid",
+            replacement="SMH",
+            pydeid_types=["Site Acronym"],
+            metadata={},
+        )
 
-    assert deidentified_text == "Transferred from SMH for review."
-    assert warnings == []
-    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+        deidentified_text, final_spans, warnings = (
+            reconstruction._reconstruct_with_project_replacements(note, [span])
+        )
+
+        assert deidentified_text == note
+        assert warnings == []
+        assert final_spans[0].action == "preserved"
+        assert (
+            final_spans[0].metadata["replacement_source"]
+            == "project_clinical_abbreviation_veto"
+        )
+        assert (
+            final_spans[0].metadata["project_clinical_abbreviation_policy"]
+            == "preserved_standalone_pmh"
+        )
+        assert final_spans[0].metadata["project_clinical_abbreviation"] == token
+        assert (
+            final_spans[0].metadata["project_clinical_abbreviation_context"]
+            == "past_medical_history"
+        )
+
+
+def test_reconstruction_does_not_preserve_pmh_inside_larger_tokens():
+    examples = [
+        ("PMHC was listed as the source.", "PMH"),
+        ("XPMH was listed as the source.", "PMH"),
+        ("pmhClinic was listed as the source.", "pmh"),
+    ]
+
+    for note, token in examples:
+        start = note.index(token)
+        span = PHISpan(
+            start=start,
+            end=start + len(token),
+            text=token,
+            label="HOSPITAL",
+            source="pyDeid",
+            replacement="SMH",
+            pydeid_types=["Site Acronym"],
+            metadata={},
+        )
+
+        deidentified_text, final_spans, warnings = (
+            reconstruction._reconstruct_with_project_replacements(note, [span])
+        )
+
+        assert "SMH" in deidentified_text
+        assert warnings == []
+        assert final_spans[0].metadata["replacement_source"] == "pyDeid"
 
 def test_reconstruction_preserves_standalone_pmh_in_medical_history_context():
     note = "This patient has PMH of PCOS, obesity, and HTN."

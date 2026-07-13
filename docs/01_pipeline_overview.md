@@ -106,9 +106,8 @@ that a project semantic-preservation rule may preserve. See
 Reconstruction priority:
 
 1. protected clinical term veto;
-2. narrow clinical abbreviation vetoes, such as `PMHx`, standalone `PMH` in
-   past-medical-history context, and selected context-bound clinical
-   abbreviations;
+2. narrow clinical abbreviation vetoes, such as `PMHx`, standalone bounded-token
+   `PMH`/`pmh`, and selected context-bound clinical abbreviations;
 3. strict obstetric-history shorthand vetoes such as `G1P0A0`;
 4. stable date shifting, including preservation of score/fraction notation that
    pyDeid emitted as a date-like span;

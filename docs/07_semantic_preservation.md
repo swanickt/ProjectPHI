@@ -63,9 +63,10 @@ not as substrings inside ordinary words.
 pyDeid can emit `PMH` as a site acronym inside `PMHx`. ProjectPHI preserves the
 pyDeid-emitted `PMH` span when it is immediately followed by `x` or `X`, so the
 common clinical shorthand `PMHx` remains intact. ProjectPHI also preserves
-standalone `PMH` only in bounded past-medical-history context, and selected
-short abbreviations such as `NIA`/`AA` in `NIA-AA`, `SAH`, `MSH`, `WES`, `SAM`,
-or `AMAN` only when nearby context supports a specific clinical meaning.
+standalone `PMH`/`pmh` as a bounded token while avoiding matches inside larger
+words such as `PMHC` or `pmhClinic`. Selected short abbreviations such as
+`NIA`/`AA` in `NIA-AA`, `SAH`, `MSH`, `WES`, `SAM`, or `AMAN` are preserved
+only when nearby context supports a specific clinical meaning.
 
 ## Obstetric-History Semantics
 

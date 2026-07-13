@@ -1383,9 +1383,9 @@ def _clinical_abbreviation_veto_metadata(
     """Return metadata when a pyDeid span is clinical shorthand.
 
     This project veto is intentionally narrow and span-local. It handles
-    observed abbreviation false positives such as `PMH` in medical-history
-    context, `PMH` inside `PMHx`, and short molecular/clinical abbreviations
-    only when bounded local context supports a clinical reading.
+    observed abbreviation false positives such as standalone `PMH`, `PMH`
+    inside `PMHx`, and short molecular/clinical abbreviations only when
+    bounded local context supports a clinical reading.
     """
     token = span.text.upper()
     context = _span_context(original_text, span.start, span.end).casefold()
@@ -1399,6 +1399,12 @@ def _clinical_abbreviation_veto_metadata(
         if _context_contains(context, _PMH_CONTEXT_TERMS):
             return {
                 "project_clinical_abbreviation_policy": "preserved_clinical_abbreviation_context",
+                "project_clinical_abbreviation": span.text,
+                "project_clinical_abbreviation_context": "past_medical_history",
+            }
+        if _span_has_nonword_boundaries(span, original_text):
+            return {
+                "project_clinical_abbreviation_policy": "preserved_standalone_pmh",
                 "project_clinical_abbreviation": span.text,
                 "project_clinical_abbreviation_context": "past_medical_history",
             }

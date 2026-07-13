@@ -75,8 +75,8 @@ silently skipping them could preserve raw text.
 Priority order during reconstruction:
 
 1. protected clinical term veto;
-2. clinical abbreviation vetoes, such as preserving `PMHx`, standalone `PMH`
-   in past-medical-history context, and selected context-bound clinical
+2. clinical abbreviation vetoes, such as preserving `PMHx`, standalone
+   bounded-token `PMH`/`pmh`, and selected context-bound clinical
    abbreviations such as `SAH`, `MSH`, `WES`, `SAM`, or `AMAN`;
 3. strict obstetric-history shorthand vetoes such as `G1P0A0`;
 4. stable date shifting, including preservation of score/fraction notation that
@@ -140,9 +140,10 @@ ProjectPHI includes narrow span-local vetoes for observed clinical
 abbreviation false positives. pyDeid can emit `PMH` as a `Site Acronym` inside
 `PMHx`; ProjectPHI preserves the emitted `PMH` span when the next original
 character is `x` or `X`, leaving the clinical abbreviation intact. It also
-preserves standalone `PMH` only in bounded past-medical-history context, and
-selected short abbreviations such as `NIA`/`AA` in `NIA-AA`, `SAH`, `MSH`,
-`WES`, `SAM`, or `AMAN` only when nearby context supports a specific clinical
+preserves standalone `PMH`/`pmh` as a bounded token while avoiding matches
+inside larger words such as `PMHC` or `pmhClinic`. Selected short
+abbreviations such as `NIA`/`AA` in `NIA-AA`, `SAH`, `MSH`, `WES`, `SAM`, or
+`AMAN` are preserved only when nearby context supports a specific clinical
 meaning.
 
 ## Obstetric-History Shorthand
