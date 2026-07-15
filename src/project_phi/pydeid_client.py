@@ -61,13 +61,19 @@ def run_pydeid_deid_string(
     return deid_string(note_text, **deid_kwargs)
 
 
+def preflight_pydeid_import() -> None:
+    """Validate that pyDeid and its import-time dependencies are available."""
+    _load_deid_string()
+
+
 def _load_deid_string():
     """Import pyDeid only when de-identification is actually used."""
     try:
         from pyDeid import deid_string
     except ImportError as exc:
         raise RuntimeError(
-            "pyDeid is not importable. Please install pyDeid from the pinned project dependency."
+            "pyDeid is not importable. Please install pyDeid from the pinned "
+            f"project dependency. Underlying import error: {type(exc).__name__}: {exc}"
         ) from exc
 
     return deid_string

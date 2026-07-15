@@ -3,6 +3,7 @@
 import csv
 import json
 
+import project_phi.cli as cli_module
 from project_phi.cli import main
 from conftest import _read_csv, _write_csv
 
@@ -519,3 +520,46 @@ def test_cli_missing_provider_manifest_returns_nonzero_and_sanitized(capsys, tmp
     assert "--provider-alias-manifest" in captured.err
     assert "Chen" not in captured.err
     assert "Radiologist Chen" not in captured.out
+
+
+def test_cli_preflight_import_failure_fails_before_row_processing(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-cli-preflight-001",
+                "note_id": "Note/synth-cli-preflight-001",
+                "note_text": "Patient Zylanda Qorven attended.",
+            }
+        ],
+    )
+
+    def fail_preflight():
+        raise RuntimeError(
+            "pyDeid is not importable. Please install pyDeid from the pinned "
+            "project dependency. Underlying import error: ModuleNotFoundError: "
+            "No module named 'click'"
+        )
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("deidentify_csv should not run after preflight failure")
+
+    monkeypatch.setattr(cli_module, "preflight_pydeid_import", fail_preflight)
+    monkeypatch.setattr(cli_module, "deidentify_csv", fail_if_called)
+
+    exit_code = main([str(input_file), str(output_file)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "pyDeid is not importable" in captured.err
+    assert "ModuleNotFoundError" in captured.err
+    assert "No module named 'click'" in captured.err
+    assert "Zylanda" not in captured.err
+    assert "Qorven" not in captured.err
+    assert not output_file.exists()

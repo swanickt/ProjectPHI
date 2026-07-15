@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "project-phi"
-version = "1.0.4"
+version = "1.0.5"
 description = "Ontario clinical text de-identification wrapper around pyDeid."
 requires-python = ">=3.11"
 authors = [
@@ -15,6 +15,7 @@ maintainers = [
 ]
 license = { text = "MIT" }
 dependencies = [
+    "click",
     "numpy<2",
     "pyDeid @ git+https://github.com/GEMINI-Medicine/pyDeid.git@f93d2ddb1fd857236b2d3b4b761af2b8028c7281",
     "setuptools<81",

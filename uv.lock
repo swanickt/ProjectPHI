@@ -590,9 +590,10 @@ wheels = [
 
 [[package]]
 name = "project-phi"
-version = "1.0.4"
+version = "1.0.5"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "numpy" },
     { name = "pydeid" },
     { name = "setuptools" },
@@ -605,6 +606,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click" },
     { name = "numpy", specifier = "<2" },
     { name = "pydeid", git = "https://github.com/GEMINI-Medicine/pyDeid.git?rev=f93d2ddb1fd857236b2d3b4b761af2b8028c7281" },
     { name = "pytest", marker = "extra == 'dev'" },

@@ -18,6 +18,7 @@ from .config_loaders import (
     load_protected_clinical_terms_csv,
 )
 from .csv_adapter import deidentify_csv
+from .pydeid_client import preflight_pydeid_import
 
 
 def main(
@@ -74,6 +75,7 @@ def main(
             if args.provider_alias_manifest
             else None
         )
+        preflight_pydeid_import()
         summary = deidentify_csv(
             args.input_csv,
             args.output_csv,
@@ -100,6 +102,9 @@ def main(
             protected_clinical_terms=protected_clinical_terms,
         )
     except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    except RuntimeError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
     except OSError as exc:
