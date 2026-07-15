@@ -468,6 +468,13 @@ secret. Exact fake names may depend on the installed Faker version/provider
 data, so pin the runtime environment if byte-for-byte stable provider
 surrogate names are required across deployments.
 
+Duplicate provider aliases are allowed. If the same normalized alias appears
+under more than one `provider_id`, ProjectPHI treats that alias as ambiguous
+and replaces it with one shared deterministic ambiguous-provider surrogate.
+This avoids row failures from shared surnames, but it collapses those providers
+for that ambiguous alias and should not be used for provider-level identity
+analysis. Unique full aliases remain provider-ID specific.
+
 ### Provider Alias Manifest CSV
 
 For CSV and CLI processing, provider aliases can be loaded from a small
@@ -476,7 +483,10 @@ manifest with synthetic or governed runtime data:
 ```csv
 provider_id,alias
 Provider/synthetic-chen,Chen
+Provider/synthetic-chen,Adam Chen
 Provider/synthetic-shore,Lena Shore
+Provider/synthetic-other-chen,Emily Chen
+Provider/synthetic-other-chen,Chen
 ```
 
 `load_provider_alias_manifest(path)` can be imported from
@@ -484,8 +494,9 @@ Provider/synthetic-shore,Lena Shore
 
 ```python
 {
-    "Provider/synthetic-chen": ["Chen"],
+    "Provider/synthetic-chen": ["Chen", "Adam Chen"],
     "Provider/synthetic-shore": ["Lena Shore"],
+    "Provider/synthetic-other-chen": ["Emily Chen", "Chen"],
 }
 ```
 

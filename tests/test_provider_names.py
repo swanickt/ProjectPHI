@@ -211,6 +211,152 @@ def test_provider_split_full_alias_components_use_same_stable_identity():
     assert final_spans[1].metadata["alias_match_type"] == "family"
 
 
+def test_duplicate_provider_alias_uses_shared_ambiguous_surrogate():
+    note = "Radiologist Chen reviewed mammography."
+    profile, identities = _provider_profile_and_identities(
+        {
+            "Provider/synth-chen-1": ["Adam Chen", "Chen"],
+            "Provider/synth-chen-2": ["Emily Chen", "Chen"],
+        }
+    )
+    span = _name_span(note, "Chen", replacement="Donald")
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert "Chen" not in text
+    assert text.startswith("Radiologist ")
+    assert final_spans[0].metadata["replacement_source"] == "project_stable_provider_name"
+    assert final_spans[0].metadata["project_name_policy"] == "ambiguous_provider_alias"
+    assert final_spans[0].metadata["name_role"] == "known_provider_alias"
+    assert final_spans[0].metadata["alias_match_type"] == "ambiguous_single_token"
+
+
+def test_duplicate_provider_alias_is_stable_across_notes():
+    profile, identities = _provider_profile_and_identities(
+        {
+            "Provider/synth-chen-1": ["Adam Chen", "Chen"],
+            "Provider/synth-chen-2": ["Emily Chen", "Chen"],
+        }
+    )
+    outputs = []
+    replacements = []
+
+    for note in [
+        "Radiologist Chen reviewed mammography.",
+        "Dr. Chen signed the report.",
+    ]:
+        span = _name_span(note, "Chen", replacement="Donald")
+        text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+            note,
+            [span],
+            provider_name_alias_profile=profile,
+            provider_name_identities=identities,
+        )
+        outputs.append(text)
+        replacements.append(final_spans[0].replacement)
+
+    assert replacements[0] == replacements[1]
+    assert "Chen" not in outputs[0]
+    assert "Chen" not in outputs[1]
+
+
+def test_duplicate_provider_single_token_alias_still_requires_role_context():
+    note = "Chen vegetables were discussed."
+    profile, identities = _provider_profile_and_identities(
+        {
+            "Provider/synth-chen-1": ["Adam Chen", "Chen"],
+            "Provider/synth-chen-2": ["Emily Chen", "Chen"],
+        }
+    )
+    span = _name_span(note, "Chen", replacement="Donald")
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert text == "Donald vegetables were discussed."
+    assert final_spans[0].metadata["replacement_source"] == "pyDeid"
+
+
+def test_duplicate_provider_alias_does_not_override_specific_full_alias():
+    note = "Dr. Adam Chen reviewed mammography."
+    profile, identities = _provider_profile_and_identities(
+        {
+            "Provider/synth-chen-1": ["Adam Chen", "Chen"],
+            "Provider/synth-chen-2": ["Emily Chen", "Chen"],
+        }
+    )
+    span = _name_span(note, "Adam Chen", replacement="Donald Dunn")
+
+    text, final_spans, _warnings = reconstruction._reconstruct_with_project_replacements(
+        note,
+        [span],
+        provider_name_alias_profile=profile,
+        provider_name_identities=identities,
+    )
+
+    assert text == f"Dr. {identities['Provider/synth-chen-1']['full']} reviewed mammography."
+    assert final_spans[0].metadata["replacement_source"] == "project_stable_provider_name"
+    assert final_spans[0].metadata["project_name_policy"] == "known_provider_alias"
+    assert final_spans[0].metadata["alias_match_type"] == "full"
+
+
+def test_duplicate_provider_alias_residual_csv_does_not_fail_rows(tmp_path, monkeypatch):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    audit_file = tmp_path / "audit.csv"
+    _write_csv(
+        input_file,
+        [
+            {
+                "patient_id": "Patient/synth-provider-csv-duplicate-001",
+                "note_id": "Note/synth-provider-csv-duplicate-001",
+                "note_text": "Radiologist Chen reviewed mammography.",
+            }
+        ],
+    )
+
+    def fake_pydeid(note_text, **_kwargs):
+        return [], note_text
+
+    monkeypatch.setattr(note_module, "run_pydeid_deid_string", fake_pydeid)
+
+    summary = deidentify_csv(
+        input_file,
+        output_file,
+        audit_output_file=audit_file,
+        stable_provider_name_surrogates=True,
+        provider_aliases_by_provider_id={
+            "Provider/synth-chen-1": ["Adam Chen", "Chen"],
+            "Provider/synth-chen-2": ["Emily Chen", "Chen"],
+        },
+        provider_name_secret="synthetic-provider-secret",
+    )
+
+    output_rows = _read_csv(output_file)
+    audit_rows = _read_csv(audit_file)
+    provider_rows = [
+        row
+        for row in audit_rows
+        if row["replacement_source"] == "project_residual_provider_alias"
+    ]
+    assert summary["rows_read"] == 1
+    assert summary["rows_written"] == 1
+    assert summary["rows_failed"] == 0
+    assert "Chen" not in output_rows[0]["note_text"]
+    assert provider_rows
+    assert provider_rows[0]["project_name_policy"] == "ambiguous_provider_alias"
+    assert provider_rows[0]["alias_match_type"] == "ambiguous_single_token"
+
+
 def test_provider_split_full_alias_is_consistent_across_notes():
     profile, identities = _provider_profile_and_identities(
         {"Provider/synth-mason": ["Theo Mason", "Mason"]}

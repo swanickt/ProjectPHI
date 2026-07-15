@@ -257,6 +257,9 @@ Expected behavior:
 - Full aliases such as `Lena Shore` can match exactly.
 - Single-token aliases such as `Chen` require provider-role context, such as
   `Radiologist Chen`.
+- Duplicate aliases across provider IDs are allowed, but the duplicate alias
+  receives one shared ambiguous-provider surrogate rather than a
+  provider-specific identity.
 - Configured single-token names are not replaced globally in ordinary text, so
   `Green vegetables` remains unchanged unless `Green` appears in provider-role
   context.
@@ -278,6 +281,14 @@ replacement_source="project_stable_provider_name"
 project_name_policy="known_provider_alias"
 name_role="known_provider_alias"
 alias_match_type="full" or "given" or "single_token"
+```
+
+Duplicate provider aliases use:
+
+```text
+project_name_policy="ambiguous_provider_alias"
+name_role="known_provider_alias"
+alias_match_type="ambiguous_full" or "ambiguous_single_token"
 ```
 
 If pyDeid prunes a supplied provider alias before ProjectPHI sees it, the

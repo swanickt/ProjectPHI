@@ -91,6 +91,8 @@ _PROVIDER_ROLE_CONTEXTS = (
     "surgeon",
 )
 
+_AMBIGUOUS_PROVIDER_ALIAS_PREFIX = "__ambiguous_provider_alias__|"
+
 
 def _resolve_provider_name_secret(
     provider_name_secret: str | bytes | None,  # Direct provider-name HMAC secret.
@@ -130,10 +132,11 @@ def _build_provider_alias_profile(
             "stable_provider_name_surrogates=True requires provider_aliases_by_provider_id."
         )
 
-    aliases: dict[str, dict[str, str]] = {}
+    aliases: dict[str, dict[str, Any]] = {}
     full_alias_texts: dict[str, list[str]] = {}
     custom_first_names: set[str] = set()
     custom_last_names: set[str] = set()
+    alias_provider_ids: dict[str, set[str]] = {}
 
     for provider_id, raw_aliases in provider_aliases_by_provider_id.items():
         provider_key = str(provider_id or "").strip()
@@ -152,19 +155,38 @@ def _build_provider_alias_profile(
                 raise ValueError(
                     "stable_provider_name_surrogates=True received an empty provider alias."
                 )
-            if normalized in aliases and aliases[normalized]["provider_id"] != provider_key:
-                raise ValueError(
-                    "stable_provider_name_surrogates=True received duplicate provider aliases."
-                )
             parts = normalized.split()
-            match_type = "full" if len(parts) >= 2 else "single_token"
-            aliases[normalized] = {"provider_id": provider_key, "match_type": match_type}
+            alias_provider_ids.setdefault(normalized, set()).add(provider_key)
             if len(parts) >= 2:
-                full_alias_texts.setdefault(provider_key, []).append(normalized)
                 custom_first_names.add(_alias_token_for_pydeid(parts[0]))
                 custom_last_names.add(_alias_token_for_pydeid(parts[-1]))
             else:
                 custom_last_names.add(_alias_token_for_pydeid(parts[0]))
+
+    for normalized, provider_ids in alias_provider_ids.items():
+        parts = normalized.split()
+        base_match_type = "full" if len(parts) >= 2 else "single_token"
+        if len(provider_ids) == 1:
+            provider_key = next(iter(provider_ids))
+            aliases[normalized] = {
+                "provider_id": provider_key,
+                "provider_ids": sorted(provider_ids),
+                "match_type": base_match_type,
+                "ambiguous": False,
+            }
+        else:
+            aliases[normalized] = {
+                "provider_id": _ambiguous_provider_alias_identity_key(normalized),
+                "provider_ids": sorted(provider_ids),
+                "match_type": f"ambiguous_{base_match_type}",
+                "ambiguous": True,
+            }
+
+        if base_match_type == "full":
+            full_alias_texts.setdefault(
+                aliases[normalized]["provider_id"],
+                [],
+            ).append(normalized)
 
     return {
         "aliases": aliases,
@@ -257,7 +279,11 @@ def _residual_provider_alias_spans(
                     pydeid_types=["Project residual provider alias"],
                     metadata={
                         "residual_provider_alias": True,
-                        "provider_id": alias_info["provider_id"],
+                        "provider_id": (
+                            ""
+                            if alias_info.get("ambiguous")
+                            else alias_info["provider_id"]
+                        ),
                         "provider_alias_match_type": alias_info["match_type"],
                         "patient_id": patient_id,
                         "encounter_id": encounter_id,
@@ -289,16 +315,20 @@ def _project_provider_name_replacement(
 
     normalized = _normalize_alias(span.text)
     alias_info = provider_alias_profile["aliases"].get(normalized)
-    if alias_info is None:
-        alias_info = _component_alias_info_inside_full_alias(
-            normalized,
-            span,
-            original_text,
-            provider_alias_profile,
-        )
+    component_alias_info = _component_alias_info_inside_full_alias(
+        normalized,
+        span,
+        original_text,
+        provider_alias_profile,
+    )
+    if component_alias_info is not None and (
+        alias_info is None
+        or alias_info.get("match_type") == "ambiguous_single_token"
+    ):
+        alias_info = component_alias_info
     if alias_info is None:
         return None
-    if alias_info["match_type"] == "single_token":
+    if alias_info["match_type"] in {"single_token", "ambiguous_single_token"}:
         if _has_provider_role_context(original_text, span.start, span.end):
             pass
         else:
@@ -308,15 +338,20 @@ def _project_provider_name_replacement(
                 original_text,
                 provider_alias_profile,
             )
-            if alias_info is None or alias_info["match_type"] == "single_token":
+            if alias_info is None or alias_info["match_type"] in {
+                "single_token",
+                "ambiguous_single_token",
+            }:
                 return None
 
     identity = provider_name_identities[alias_info["provider_id"]]
-    if alias_info["match_type"] == "full":
+    if alias_info.get("ambiguous"):
+        return _provider_alias_replacement_text(alias_info, identity), alias_info["match_type"]
+    if alias_info["match_type"] in {"full", "ambiguous_full"}:
         return identity["full"], "full"
-    if alias_info["match_type"] == "given":
+    if alias_info["match_type"] in {"given", "ambiguous_given"}:
         return identity["given"], "given"
-    if alias_info["match_type"] == "family":
+    if alias_info["match_type"] in {"family", "ambiguous_family"}:
         return identity["family"], "family"
     return identity["family"], "single_token"
 
@@ -431,13 +466,13 @@ def _project_provider_trailing_action_replacement(
 
 
 def _provider_alias_replacement_text(
-    alias_info: dict[str, str],
+    alias_info: dict[str, Any],
     identity: dict[str, str],
 ) -> str:
     """Return the fake provider-name component matching the alias granularity."""
-    if alias_info["match_type"] == "full":
+    if alias_info["match_type"] in {"full", "ambiguous_full"}:
         return identity["full"]
-    if alias_info["match_type"] == "given":
+    if alias_info["match_type"] in {"given", "ambiguous_given"}:
         return identity["given"]
     return identity["family"]
 
@@ -463,7 +498,7 @@ def _component_alias_info_inside_full_alias(
     span: PHISpan,
     original_text: str,
     provider_alias_profile: dict[str, Any],
-) -> dict[str, str] | None:
+) -> dict[str, Any] | None:
     """Support pyDeid split spans when they sit inside configured full aliases."""
     lowered = original_text.casefold()
     for provider_id, full_aliases in provider_alias_profile["full_alias_texts"].items():
@@ -475,9 +510,16 @@ def _component_alias_info_inside_full_alias(
             while start != -1:
                 end = start + len(full_alias)
                 if start <= span.start and span.end <= end:
+                    match_type = "given" if normalized == parts[0] else "family"
+                    if _is_ambiguous_provider_alias_identity_key(provider_id):
+                        match_type = f"ambiguous_{match_type}"
                     return {
                         "provider_id": provider_id,
-                        "match_type": "given" if normalized == parts[0] else "family",
+                        "provider_ids": [],
+                        "match_type": match_type,
+                        "ambiguous": _is_ambiguous_provider_alias_identity_key(
+                            provider_id
+                        ),
                     }
                 start = lowered.find(full_alias, start + 1)
     return None
@@ -511,6 +553,12 @@ def _provider_name_policy_metadata(
 ) -> dict[str, str]:
     """Return audit metadata for explicit provider aliases."""
     if replacement_source in {"project_stable_provider_name", "project_residual_provider_alias"}:
+        if policy.startswith("ambiguous_"):
+            return {
+                "project_name_policy": "ambiguous_provider_alias",
+                "name_role": "known_provider_alias",
+                "alias_match_type": policy,
+            }
         return {
             "project_name_policy": (
                 "residual_explicit_provider_alias"
@@ -527,3 +575,17 @@ def _provider_name_policy_metadata(
             "alias_match_type": policy,
         }
     return {}
+
+
+def _ambiguous_provider_alias_identity_key(
+    normalized_alias: str,
+) -> str:
+    """Return an internal identity key for duplicate provider aliases."""
+    return f"{_AMBIGUOUS_PROVIDER_ALIAS_PREFIX}{normalized_alias}"
+
+
+def _is_ambiguous_provider_alias_identity_key(
+    provider_id: str,
+) -> bool:
+    """Return true for internal duplicate-alias identity keys."""
+    return provider_id.startswith(_AMBIGUOUS_PROVIDER_ALIAS_PREFIX)

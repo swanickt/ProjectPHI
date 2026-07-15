@@ -229,6 +229,10 @@ such as `Lena Shore` can match exactly without role context. Single-token
 aliases such as `Chen`, `Green`, or `Cook` require nearby provider-role context
 such as `Radiologist Chen`, `Social worker Green`, or a nearby `MD` marker.
 This prevents configured common-word-like names from being replaced globally.
+Duplicate aliases across provider IDs are allowed. A duplicate alias collapses
+to one shared ambiguous-provider surrogate keyed by the alias text and
+provider-name secret. This preserves de-identification and text coherence, but
+the duplicate alias is not suitable for provider-level identity analysis.
 
 Provider fake identities are deterministic per `provider_id` and provider-name
 secret. They use the same Faker-backed generation path as stable patient names,
@@ -241,7 +245,9 @@ Provider alias replacements are audited with
 Policy metadata uses `project_name_policy="known_provider_alias"` or
 `project_name_policy="residual_explicit_provider_alias"`,
 `name_role="known_provider_alias"`, and `alias_match_type` values such as
-`full`, `given`, or `single_token`.
+`full`, `given`, or `single_token`. Duplicate aliases use
+`project_name_policy="ambiguous_provider_alias"` and `alias_match_type` values
+such as `ambiguous_full` or `ambiguous_single_token`.
 
 ## Patient Timeline Unknown-Name Surrogates
 
