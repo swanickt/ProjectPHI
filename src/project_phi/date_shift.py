@@ -518,7 +518,7 @@ def _date_from_parsed_phi(
     try:
         month = _month_number(parsed["month"])
         return date(
-            int(parsed["year"]),
+            _parsed_year_number(parsed["year"]),
             month,
             int(parsed["day"]),
         )
@@ -533,7 +533,7 @@ def _month_year_date_from_parsed_phi(
     parsed = span.metadata.get("parsed_phi") or {}
     try:
         return date(
-            int(parsed["year"]),
+            _parsed_year_number(parsed["year"]),
             _month_number(parsed["month"]),
             _MONTH_YEAR_ANCHOR_DAY,
         )
@@ -554,6 +554,19 @@ def _month_day_date_from_parsed_phi(
         )
     except (KeyError, TypeError, ValueError):
         return None
+
+
+def _parsed_year_number(
+    year_value,
+) -> int:
+    """Return a full year number from pyDeid parsed date metadata."""
+    year_text = str(year_value).strip()
+    if not year_text:
+        raise ValueError("empty year")
+    year = int(year_text)
+    if len(year_text) <= 2:
+        return 2000 + year if year <= 69 else 1900 + year
+    return year
 
 
 def _parse_natural_language_full_date(

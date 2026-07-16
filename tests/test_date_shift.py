@@ -800,6 +800,79 @@ def test_stable_date_shift_still_shifts_three_part_slash_date_near_apgar_without
     assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_full_date"
     assert warnings == []
 
+@pytest.mark.parametrize(
+    ("date_text", "year_text", "expected_replacement"),
+    [
+        ("8/31/18", "18", "2018-08-31"),
+        ("8/31/69", "69", "2069-08-31"),
+        ("8/31/70", "70", "1970-08-31"),
+        ("8/31/98", "98", "1998-08-31"),
+    ],
+)
+def test_stable_date_shift_expands_two_digit_years_in_parsed_slash_dates(
+    date_text,
+    year_text,
+    expected_replacement,
+):
+    note = f"Treatment date was {date_text}."
+    start = note.index(date_text)
+    span = PHISpan(
+        start=start,
+        end=start + len(date_text),
+        text=date_text,
+        label="DATE",
+        source="pyDeid",
+        replacement="January 1, 2030",
+        pydeid_types=["Month/Day/Year [mm/dd/yy(yy)]"],
+        metadata={
+            "parsed_phi": {
+                "kind": "date",
+                "month": "8",
+                "day": "31",
+                "year": year_text,
+            }
+        },
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=0,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == f"Treatment date was {expected_replacement}."
+    assert final_spans[0].replacement == expected_replacement
+    assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_full_date"
+    assert warnings == []
+
+def test_stable_date_shift_expands_two_digit_years_in_parsed_month_year_dates():
+    note = "Follow-up occurred in 8/18."
+    date_text = "8/18"
+    start = note.index(date_text)
+    span = PHISpan(
+        start=start,
+        end=start + len(date_text),
+        text=date_text,
+        label="DATE",
+        source="pyDeid",
+        replacement="January 2030",
+        pydeid_types=["Month/Year 1 [mm/yy(yy)]"],
+        metadata={"parsed_phi": {"kind": "date", "month": "8", "year": "18"}},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=0,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == "Follow-up occurred in August 2018."
+    assert final_spans[0].replacement == "August 2018"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_month_year"
+    assert warnings == []
+
 def test_stable_date_shift_still_shifts_slash_month_year_without_fraction_context():
     note = "Follow-up occurred in 10/2021."
     start = note.index("10/2021")
