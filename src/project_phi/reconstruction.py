@@ -1078,6 +1078,16 @@ def _project_replacement_for_span(
     if date_shift_offset is not None and _is_date_like_span(span):
         return "<DATE>", "project_stable_date_shift", "unparseable_date_placeholder", {}
 
+    if span.source == "ProjectPHI.pre_pydeid_date_range":
+        return (
+            span.replacement or "<DATE>",
+            "project_pre_pydeid_date_range",
+            "shielded_compact_slash_date_range",
+            {
+                "project_pre_pydeid_policy": "shielded_compact_slash_date_range",
+            },
+        )
+
     # Patient-name policy: only explicit patient aliases receive the stable fake
     # patient identity here. The optional batch unknown-name registry runs later.
     if patient_name_alias_profile is not None and patient_name_identity is not None and span.label == "NAME":

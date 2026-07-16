@@ -56,6 +56,7 @@ from .models import PHISpan
 # - patient_name_style: Optional caller-supplied fake patient given-name style.
 # - custom_regex_rule_id: ProjectPHI custom regex rule ID responsible for this span.
 # - custom_regex_phi_type: Configured custom regex phi_type associated with this span.
+# - project_pre_pydeid_policy: Pre-pyDeid shielding policy, if applied.
 # - project_protected_term_policy: Protected-term handling policy applied to this span.
 # - project_protected_term_rule_id: Protected-term rule ID associated with this span.
 # - project_protected_term_category: Protected-term category associated with this span.
@@ -118,6 +119,7 @@ AUDIT_COLUMNS = [
     "patient_name_style",
     "custom_regex_rule_id",
     "custom_regex_phi_type",
+    "project_pre_pydeid_policy",
     "project_protected_term_policy",
     "project_protected_term_rule_id",
     "project_protected_term_category",
@@ -203,6 +205,7 @@ def _span_to_audit_row(
         "patient_name_style": span.metadata.get("patient_name_style"),
         "custom_regex_rule_id": span.metadata.get("custom_regex_rule_id"),
         "custom_regex_phi_type": span.metadata.get("custom_regex_phi_type"),
+        "project_pre_pydeid_policy": span.metadata.get("project_pre_pydeid_policy"),
         "project_protected_term_policy": span.metadata.get("project_protected_term_policy"),
         "project_protected_term_rule_id": span.metadata.get("project_protected_term_rule_id"),
         "project_protected_term_category": span.metadata.get("project_protected_term_category"),

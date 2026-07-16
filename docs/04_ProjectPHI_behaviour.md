@@ -114,6 +114,11 @@ such as `July 15`. Slash date ranges that pyDeid emits as date-range spans are
 shifted endpoint-by-endpoint. The project does not scan the full note for
 dates.
 
+One narrow exception is compact slash date ranges without spaces around the
+hyphen, such as `8/31/18-2/21/2018`. These are shielded before pyDeid to avoid
+a pyDeid parser crash, then reconstructed from original offsets as project
+date-range spans.
+
 Month/year spans keep month/year granularity. The project uses the same
 patient-specific day offset as full dates with an internal day-15 anchor, then
 outputs only `Month YYYY`.

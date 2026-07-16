@@ -964,6 +964,71 @@ def test_deidentify_note_shifts_live_pydeid_four_digit_slash_date_range():
     assert len(date_range_spans) == 1
     assert date_range_spans[0].metadata["project_date_shift_granularity"] == "date_range"
 
+def test_deidentify_note_shields_compact_mixed_year_date_range_before_pydeid():
+    note = "Treatment dates were 8/31/18-2/21/2018."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-date-range-002",
+        stable_date_shift=True,
+        date_shift_secret="date-secret",
+    )
+
+    assert "<DATE>" not in result.deidentified_text
+    assert "8/31/18" not in result.deidentified_text
+    assert "2/21/2018" not in result.deidentified_text
+    date_range_spans = [
+        span
+        for span in result.spans
+        if span.source == "ProjectPHI.pre_pydeid_date_range"
+    ]
+    assert len(date_range_spans) == 1
+    assert date_range_spans[0].metadata["replacement_source"] == "project_stable_date_shift"
+    assert date_range_spans[0].metadata["project_date_shift_policy"] == "shifted_date_range"
+    assert date_range_spans[0].metadata["project_date_shift_granularity"] == "date_range"
+    assert date_range_spans[0].metadata["project_pre_pydeid_policy"] == (
+        "shielded_compact_slash_date_range"
+    )
+
+def test_deidentify_note_shields_compact_date_range_without_stable_date_shift():
+    note = "Treatment dates were 8/31/18-2/21/2018."
+
+    result = deidentify_note(note, patient_id="Patient/synth-date-range-003")
+
+    assert result.deidentified_text == "Treatment dates were <DATE>."
+    date_range_spans = [
+        span
+        for span in result.spans
+        if span.source == "ProjectPHI.pre_pydeid_date_range"
+    ]
+    assert len(date_range_spans) == 1
+    assert date_range_spans[0].metadata["replacement_source"] == (
+        "project_pre_pydeid_date_range"
+    )
+    assert date_range_spans[0].metadata["project_pre_pydeid_policy"] == (
+        "shielded_compact_slash_date_range"
+    )
+
+def test_pre_pydeid_date_range_shield_does_not_affect_clinical_numeric_fragments():
+    examples = [
+        "GCS 6/15 after admission.",
+        "Pathology showed 1/50 nodes positive.",
+        "CA 15-3 was elevated.",
+        "HER2 3+ was reported.",
+    ]
+
+    for note in examples:
+        result = deidentify_note(
+            note,
+            patient_id="Patient/synth-date-range-004",
+            stable_date_shift=True,
+            date_shift_secret="date-secret",
+        )
+
+        assert not any(
+            span.source == "ProjectPHI.pre_pydeid_date_range" for span in result.spans
+        )
+
 def test_stable_date_shift_still_shifts_slash_month_year_without_fraction_context():
     note = "Follow-up occurred in 10/2021."
     start = note.index("10/2021")

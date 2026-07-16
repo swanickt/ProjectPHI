@@ -162,6 +162,43 @@ def test_deidentify_csv_stable_date_shift_audit_metadata_without_raw_phi(tmp_pat
     assert raw_date not in audit_text
     assert raw_identifier not in audit_text
 
+def test_deidentify_csv_pre_pydeid_date_range_audit_metadata_without_raw_phi(tmp_path):
+    input_file = tmp_path / "input.csv"
+    output_file = tmp_path / "output.csv"
+    audit_file = tmp_path / "audit.csv"
+    raw_range = "8/31/18-2/21/2018"
+    rows = [
+        {
+            "patient_id": "Patient/synth-csv-date-range-001",
+            "note_id": "Note/synth-csv-date-range-001",
+            "note_text": f"Treatment dates were {raw_range}.",
+        }
+    ]
+    _write_csv(input_file, rows)
+
+    deidentify_csv(
+        input_file,
+        output_file,
+        audit_output_file=audit_file,
+        stable_date_shift=True,
+        date_shift_secret="synthetic-secret",
+    )
+
+    audit_text = audit_file.read_text(encoding="utf-8")
+    audit_rows = _read_csv(audit_file)
+    range_rows = [
+        row
+        for row in audit_rows
+        if row["replacement_source"] == "project_stable_date_shift"
+        and row["project_date_shift_policy"] == "shifted_date_range"
+    ]
+    assert range_rows
+    assert range_rows[0]["project_pre_pydeid_policy"] == (
+        "shielded_compact_slash_date_range"
+    )
+    assert raw_range not in audit_text
+    assert rows[0]["note_text"] not in audit_text
+
 def test_deidentify_csv_stable_date_shift_missing_patient_id_row_fails_safely(tmp_path):
     input_file = tmp_path / "input.csv"
     output_file = tmp_path / "output.csv"

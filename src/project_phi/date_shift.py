@@ -84,6 +84,14 @@ _SLASH_DATE_RANGE_RE = re.compile(
     r"(?P<suffix>\s*)$",
     re.IGNORECASE,
 )
+_COMPACT_SLASH_DATE_RANGE_RE = re.compile(
+    r"(?<![A-Za-z0-9/])"
+    r"(?P<start_month>[0-9]{1,2})/(?P<start_day>[0-9]{1,2})/"
+    r"(?P<start_year>[0-9]{2}(?:[0-9]{2})?)-"
+    r"(?P<end_month>[0-9]{1,2})/(?P<end_day>[0-9]{1,2})/"
+    r"(?P<end_year>[0-9]{2}(?:[0-9]{2})?)"
+    r"(?![A-Za-z0-9/])"
+)
 _SLASH_SCORE_OR_FRACTION_RE = re.compile(r"^\s*\d{1,2}/\d{1,3}\s*$")
 _SLASH_APGAR_SCORE_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{1,2}\s*$")
 _TUMOR_MARKER_NUMBER_RE = re.compile(r"^\s*\d{1,2}(?:[-.]\d{1,2})\s*$")
@@ -322,6 +330,52 @@ def get_patient_date_shift(
         secret=secret,
         date_shift_days=date_shift_days,
     )
+
+
+def _shield_pre_pydeid_compact_date_ranges(
+    note_text: str,
+    *,
+    patient_id: str | None = None,
+    encounter_id: str | None = None,
+    note_id: str | None = None,
+) -> tuple[str, list[PHISpan]]:
+    """Shield compact slash date ranges that crash pyDeid's date parser."""
+    spans: list[PHISpan] = []
+    shielded_parts: list[str] = []
+    cursor = 0
+
+    for match in _COMPACT_SLASH_DATE_RANGE_RE.finditer(note_text):
+        range_text = match.group(0)
+        if _parse_compact_slash_date_range_match(match) is None:
+            continue
+        shielded_parts.append(note_text[cursor : match.start()])
+        shielded_parts.append(" " * len(range_text))
+        spans.append(
+            PHISpan(
+                start=match.start(),
+                end=match.end(),
+                text=range_text,
+                label="DATE",
+                source="ProjectPHI.pre_pydeid_date_range",
+                replacement="<DATE>",
+                pydeid_types=["Project compact slash date range"],
+                metadata={
+                    "patient_id": patient_id,
+                    "encounter_id": encounter_id,
+                    "note_id": note_id,
+                    "project_pre_pydeid_policy": (
+                        "shielded_compact_slash_date_range"
+                    ),
+                },
+            )
+        )
+        cursor = match.end()
+
+    if not spans:
+        return note_text, []
+
+    shielded_parts.append(note_text[cursor:])
+    return "".join(shielded_parts), spans
 
 
 def _is_parseable_full_date_span(
@@ -630,6 +684,27 @@ def _parse_slash_date_range(
         match.group("prefix"),
         match.group("suffix"),
     )
+
+
+def _parse_compact_slash_date_range_match(
+    match: re.Match[str],
+) -> tuple[date, date] | None:
+    """Parse one compact pre-pyDeid slash date-range match."""
+    try:
+        return (
+            date(
+                _parsed_year_number(match.group("start_year")),
+                int(match.group("start_month")),
+                int(match.group("start_day")),
+            ),
+            date(
+                _parsed_year_number(match.group("end_year")),
+                int(match.group("end_month")),
+                int(match.group("end_day")),
+            ),
+        )
+    except ValueError:
+        return None
 
 
 def _parsed_year_number(

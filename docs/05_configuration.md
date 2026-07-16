@@ -208,6 +208,11 @@ same patient-specific offset to both endpoints. These parsers operate only
 inside pyDeid date spans; they do not scan the full note or add new date
 detections.
 
+Compact slash date ranges without spaces around the hyphen, such as
+`8/31/18-2/21/2018`, are shielded before pyDeid because this shape can trigger
+a pyDeid date-parser error. ProjectPHI then handles the original range as a
+synthetic date span during reconstruction.
+
 Month/year spans preserve month/year granularity. The implementation anchors
 the source month internally to day 15, applies the same patient-specific day
 offset used for full dates, and outputs only `Month YYYY`. For example,

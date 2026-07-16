@@ -12,6 +12,7 @@ from .custom_regex import _build_pydeid_custom_regexes
 from .date_shift import (
     _requested_types_include_dates,
     _resolve_date_shift_secret,
+    _shield_pre_pydeid_compact_date_ranges,
     _stable_date_shift_offset,
 )
 from .models import DeidentificationResult
@@ -187,8 +188,20 @@ def deidentify_note(
 
     # pyDeid remains the detector/pruner/initial surrogate source. Project code
     # only normalizes spans and optionally reconstructs stable replacements.
+    pydeid_note_text = note_text
+    pre_pydeid_date_range_spans = []
+    if _requested_types_include_dates(requested_types):
+        pydeid_note_text, pre_pydeid_date_range_spans = (
+            _shield_pre_pydeid_compact_date_ranges(
+                note_text,
+                patient_id=patient_id,
+                encounter_id=encounter_id,
+                note_id=note_id,
+            )
+        )
+
     surrogates, deidentified_text = run_pydeid_deid_string(
-        note_text,
+        pydeid_note_text,
         pydeid_custom_regexes=pydeid_custom_regexes,
         custom_dr_first_names=custom_dr_first_names,
         custom_dr_last_names=custom_dr_last_names,
@@ -205,6 +218,7 @@ def deidentify_note(
         note_id=note_id,
         custom_regex_metadata=custom_regex_metadata,
     )
+    spans.extend(pre_pydeid_date_range_spans)
     if stable_patient_name_surrogates:
         # pyDeid remains the detector for unknown names, but explicit aliases
         # supplied for this patient are allowed a final exact residual pass.
