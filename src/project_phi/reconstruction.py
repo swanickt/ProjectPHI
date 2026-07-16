@@ -648,6 +648,12 @@ def _prune_resolvable_overlapping_spans(
             continue
         candidate_spans.append(span)
 
+    candidate_spans, contact_warnings = _collapse_phone_like_contact_overlap_clusters(
+        candidate_spans,
+        original_text=original_text,
+    )
+    warnings.extend(contact_warnings)
+
     accepted: list[PHISpan] = []
     for candidate in sorted(candidate_spans, key=lambda item: (item.start, item.end)):
         current: PHISpan | None = candidate
@@ -666,6 +672,112 @@ def _prune_resolvable_overlapping_spans(
         if current is not None:
             accepted.append(current)
     return accepted, warnings
+
+
+def _collapse_phone_like_contact_overlap_clusters(
+    spans: list[PHISpan],
+    *,
+    original_text: str,
+) -> tuple[list[PHISpan], list[str]]:
+    """Collapse overlapping phone/contact spans into one safe contact span."""
+    if not spans or not original_text:
+        return spans, []
+
+    sorted_spans = sorted(spans, key=lambda item: (item.start, item.end))
+    repaired: list[PHISpan] = []
+    warnings: list[str] = []
+    index = 0
+
+    while index < len(sorted_spans):
+        cluster = [sorted_spans[index]]
+        cluster_end = sorted_spans[index].end
+        index += 1
+        while index < len(sorted_spans) and sorted_spans[index].start < cluster_end:
+            cluster.append(sorted_spans[index])
+            cluster_end = max(cluster_end, sorted_spans[index].end)
+            index += 1
+
+        if len(cluster) > 1 and _is_phone_like_contact_overlap_cluster(
+            cluster,
+            original_text,
+        ):
+            repaired.append(_contact_overlap_repair_span(cluster, original_text))
+            warnings.append(
+                "Overlapping phone-like contact spans collapsed during reconstruction."
+            )
+        else:
+            repaired.extend(cluster)
+
+    return sorted(repaired, key=lambda item: (item.start, item.end)), warnings
+
+
+def _is_phone_like_contact_overlap_cluster(
+    cluster: list[PHISpan],
+    original_text: str,
+) -> bool:
+    """Return true for overlapping contact/OHIP spans over phone-like text."""
+    if not cluster:
+        return False
+    if not all(_is_contact_or_phone_like_id_span(span) for span in cluster):
+        return False
+
+    start = min(span.start for span in cluster)
+    end = max(span.end for span in cluster)
+    union_text = original_text[start:end]
+    return _is_strongly_phone_like_contact_run(union_text)
+
+
+def _is_contact_or_phone_like_id_span(
+    span: PHISpan,
+) -> bool:
+    """Return true for contact spans or ID spans with phone pyDeid evidence."""
+    if span.label == "CONTACT":
+        return True
+    if span.label != "ID":
+        return False
+    return any("telephone/fax" in item.casefold() for item in span.pydeid_types or [])
+
+
+_PHONE_LIKE_CONTACT_RUN_RE = re.compile(r"^[0-9\s()./+;-]+$")
+
+
+def _is_strongly_phone_like_contact_run(
+    text: str,
+) -> bool:
+    """Return true when a span union is dominated by phone-like characters."""
+    stripped = text.strip()
+    if not stripped or _PHONE_LIKE_CONTACT_RUN_RE.match(stripped) is None:
+        return False
+    digit_count = sum(character.isdigit() for character in stripped)
+    separator_count = sum(character in " .-/();+" for character in stripped)
+    return digit_count >= 14 and separator_count >= 1
+
+
+def _contact_overlap_repair_span(
+    cluster: list[PHISpan],
+    original_text: str,
+) -> PHISpan:
+    """Build a synthetic span covering a phone-like contact overlap cluster."""
+    first = min(cluster, key=lambda item: (item.start, item.end))
+    start = min(span.start for span in cluster)
+    end = max(span.end for span in cluster)
+    metadata = dict(first.metadata)
+    metadata.update(
+        {
+            "project_contact_overlap_policy": "collapsed_phone_like_contact_overlap",
+            "project_contact_overlap_span_count": len(cluster),
+        }
+    )
+    return PHISpan(
+        start=start,
+        end=end,
+        text=original_text[start:end],
+        label="CONTACT",
+        source="ProjectPHI.contact_overlap_repair",
+        replacement="<CONTACT>",
+        pydeid_types=["Project contact overlap repair"],
+        metadata=metadata,
+    )
 
 
 _GENOMIC_COORDINATE_TOKEN_RE = re.compile(
@@ -862,6 +974,16 @@ def _project_replacement_for_span(
     Notes:
         This function does not mutate `span`.
     """
+    if span.source == "ProjectPHI.contact_overlap_repair":
+        return (
+            span.replacement or "<CONTACT>",
+            "project_contact_overlap_repair",
+            "collapsed_phone_like_contact_overlap",
+            {
+                "project_contact_overlap_policy": "collapsed_phone_like_contact_overlap",
+            },
+        )
+
     protected_match = _protected_term_match(span, protected_terms_profile, original_text)
     if protected_match is not None:
         return (

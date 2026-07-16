@@ -69,6 +69,9 @@ span-local vetoes.
 
 Reconstruction prunes deterministic pyDeid overlaps, such as nested fragments
 or same-source/same-label conflicts where one span is clearly safer to keep.
+When overlapping pyDeid contact/OHIP spans cover strongly phone-like text,
+ProjectPHI collapses the full run to `<CONTACT>` and audits
+`replacement_source="project_contact_overlap_repair"`.
 Unresolved mixed overlaps still fail closed with a sanitized error because
 silently skipping them could preserve raw text.
 
