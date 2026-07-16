@@ -27,6 +27,10 @@ such as `March 2021` while preserving month/year granularity. Month/year
 shifting uses the same patient-specific day offset as full dates with an
 internal day-15 anchor, then outputs only `Month YYYY`.
 
+When pyDeid emits a slash date range as one date span, such as
+`8/31/2018-2/21/2018`, ProjectPHI shifts both endpoints with the same
+patient-specific offset and preserves the separator style.
+
 Month/day spans without a year, such as `July 15`, are shifted by default. The
 implementation uses an internal leap-year anchor for month rollover and outputs
 only `Month Day`.

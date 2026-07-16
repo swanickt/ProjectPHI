@@ -74,6 +74,16 @@ _NATURAL_LANGUAGE_MONTH_DAY_RE = re.compile(
     re.IGNORECASE,
 )
 _NUMERIC_MONTH_DAY_RE = re.compile(r"^\s*([0-9]{1,2})[-/]([0-9]{1,2})\s*$")
+_SLASH_DATE_RANGE_RE = re.compile(
+    r"^(?P<prefix>\s*)"
+    r"(?P<start_month>[0-9]{1,2})/(?P<start_day>[0-9]{1,2})/"
+    r"(?P<start_year>[0-9]{2}(?:[0-9]{2})?)"
+    r"(?P<separator>\s*(?:-|to)\s*)"
+    r"(?P<end_month>[0-9]{1,2})/(?P<end_day>[0-9]{1,2})/"
+    r"(?P<end_year>[0-9]{2}(?:[0-9]{2})?)"
+    r"(?P<suffix>\s*)$",
+    re.IGNORECASE,
+)
 _SLASH_SCORE_OR_FRACTION_RE = re.compile(r"^\s*\d{1,2}/\d{1,3}\s*$")
 _SLASH_APGAR_SCORE_RE = re.compile(r"^\s*\d{1,2}/\d{1,2}/\d{1,2}\s*$")
 _TUMOR_MARKER_NUMBER_RE = re.compile(r"^\s*\d{1,2}(?:[-.]\d{1,2})\s*$")
@@ -345,6 +355,15 @@ def _is_parseable_month_year_span(
     ) or _parse_natural_language_month_year(span.text) is not None
 
 
+def _is_parseable_date_range_span(
+    span: PHISpan,  # Normalized pyDeid span to classify.
+) -> bool:
+    """Return true for supported pyDeid-emitted slash date ranges."""
+    if span.label != "DATE" or not _is_pydeid_date_range_type(span):
+        return False
+    return _parse_slash_date_range(span.text) is not None
+
+
 def _is_parseable_partial_month_day_span(
     span: PHISpan,  # Normalized pyDeid span to classify.
 ) -> bool:
@@ -421,6 +440,27 @@ def _shift_month_year_span(
     return f"{_MONTH_NAMES[shifted_date.month]} {shifted_date.year}"
 
 
+def _shift_date_range_span(
+    span: PHISpan,  # Date-range span to shift.
+    date_shift_offset: int,  # Patient-specific day offset.
+) -> str | None:
+    """Return shifted slash date range text while preserving separator style."""
+    parsed = _parse_slash_date_range(span.text)
+    if parsed is None:
+        return None
+
+    start_date, end_date, separator, prefix, suffix = parsed
+    shifted_start = start_date + timedelta(days=date_shift_offset)
+    shifted_end = end_date + timedelta(days=date_shift_offset)
+    return (
+        f"{prefix}"
+        f"{shifted_start.month:02d}/{shifted_start.day:02d}/{shifted_start.year:04d}"
+        f"{separator}"
+        f"{shifted_end.month:02d}/{shifted_end.day:02d}/{shifted_end.year:04d}"
+        f"{suffix}"
+    )
+
+
 def _shift_partial_month_day_span(
     span: PHISpan,  # Partial month/day span to shift.
     date_shift_offset: int,  # Patient-specific day offset.
@@ -450,6 +490,13 @@ def _date_shift_metadata_for_month_year_span() -> dict[str, int | str]:
     return {
         "project_date_shift_granularity": "month_year",
         "project_date_shift_anchor_day": _MONTH_YEAR_ANCHOR_DAY,
+    }
+
+
+def _date_shift_metadata_for_date_range_span() -> dict[str, str]:
+    """Return audit metadata describing date-range shifting."""
+    return {
+        "project_date_shift_granularity": "date_range",
     }
 
 
@@ -556,6 +603,35 @@ def _month_day_date_from_parsed_phi(
         return None
 
 
+def _parse_slash_date_range(
+    text: str,
+) -> tuple[date, date, str, str, str] | None:
+    """Parse supported slash date ranges already emitted by pyDeid."""
+    match = _SLASH_DATE_RANGE_RE.match(text)
+    if match is None:
+        return None
+    try:
+        start_date = date(
+            _parsed_year_number(match.group("start_year")),
+            int(match.group("start_month")),
+            int(match.group("start_day")),
+        )
+        end_date = date(
+            _parsed_year_number(match.group("end_year")),
+            int(match.group("end_month")),
+            int(match.group("end_day")),
+        )
+    except ValueError:
+        return None
+    return (
+        start_date,
+        end_date,
+        match.group("separator"),
+        match.group("prefix"),
+        match.group("suffix"),
+    )
+
+
 def _parsed_year_number(
     year_value,
 ) -> int:
@@ -567,6 +643,13 @@ def _parsed_year_number(
     if len(year_text) <= 2:
         return 2000 + year if year <= 69 else 1900 + year
     return year
+
+
+def _is_pydeid_date_range_type(
+    span: PHISpan,
+) -> bool:
+    """Return true when pyDeid explicitly typed a span as a date range."""
+    return any("date range" in item.casefold() for item in span.pydeid_types or [])
 
 
 def _parse_natural_language_full_date(

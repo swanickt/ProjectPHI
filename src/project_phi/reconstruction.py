@@ -63,11 +63,13 @@ from typing import Any
 
 from .date_shift import (
     _date_shift_metadata_for_month_year_span,
+    _date_shift_metadata_for_date_range_span,
     _date_shift_metadata_for_partial_month_day_span,
     _date_shift_policy_for_full_date_span,
     _is_date_like_span,
     _is_holiday_or_season_span,
     _is_parseable_month_year_span,
+    _is_parseable_date_range_span,
     _is_parseable_partial_month_day_span,
     _is_parseable_full_date_span,
     _is_score_or_fraction_date_span,
@@ -76,6 +78,7 @@ from .date_shift import (
     _score_or_fraction_date_metadata,
     _shift_full_date_span,
     _shift_month_year_span,
+    _shift_date_range_span,
     _shift_partial_month_day_span,
 )
 from .models import PHISpan
@@ -1030,6 +1033,16 @@ def _project_replacement_for_span(
                 "project_stable_date_shift",
                 _date_shift_policy_for_full_date_span(span),
                 {},
+            )
+
+    if date_shift_offset is not None and _is_parseable_date_range_span(span):
+        shifted_text = _shift_date_range_span(span, date_shift_offset)
+        if shifted_text is not None:
+            return (
+                shifted_text,
+                "project_stable_date_shift",
+                "shifted_date_range",
+                _date_shift_metadata_for_date_range_span(),
             )
 
     if date_shift_offset is not None and _is_parseable_month_year_span(span):

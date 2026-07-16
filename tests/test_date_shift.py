@@ -873,6 +873,97 @@ def test_stable_date_shift_expands_two_digit_years_in_parsed_month_year_dates():
     assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_month_year"
     assert warnings == []
 
+@pytest.mark.parametrize(
+    ("date_range_text", "expected_replacement"),
+    [
+        ("08/31/2018-02/21/2018", "09/24/2018-03/17/2018"),
+        ("8/31/2018-2/21/2018", "09/24/2018-03/17/2018"),
+        ("08/31/18-02/21/18", "09/24/2018-03/17/2018"),
+        ("8/31/18 - 2/21/2018", "09/24/2018 - 03/17/2018"),
+        ("8/31/2018 to 2/21/2018", "09/24/2018 to 03/17/2018"),
+    ],
+)
+def test_stable_date_shift_shifts_pydeid_slash_date_range_spans(
+    date_range_text,
+    expected_replacement,
+):
+    note = f"Treatment dates were {date_range_text}."
+    start = note.index(date_range_text)
+    span = PHISpan(
+        start=start,
+        end=start + len(date_range_text),
+        text=date_range_text,
+        label="DATE",
+        source="pyDeid",
+        replacement="2009-07-14 to 2026-07-28",
+        pydeid_types=["Date range (2)"],
+        metadata={},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=24,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == f"Treatment dates were {expected_replacement}."
+    assert final_spans[0].replacement == expected_replacement
+    assert final_spans[0].metadata["replacement_source"] == "project_stable_date_shift"
+    assert final_spans[0].metadata["project_date_shift_policy"] == "shifted_date_range"
+    assert final_spans[0].metadata["project_date_shift_granularity"] == "date_range"
+    assert warnings == []
+
+def test_stable_date_shift_invalid_pydeid_date_range_falls_back_to_placeholder():
+    note = "Treatment dates were 02/31/2018-03/05/2018."
+    date_range_text = "02/31/2018-03/05/2018"
+    start = note.index(date_range_text)
+    span = PHISpan(
+        start=start,
+        end=start + len(date_range_text),
+        text=date_range_text,
+        label="DATE",
+        source="pyDeid",
+        replacement="2009-07-14 to 2026-07-28",
+        pydeid_types=["Date range (2)"],
+        metadata={},
+    )
+
+    deidentified_text, final_spans, warnings = reconstruction._reconstruct_with_stable_dates(
+        note,
+        [span],
+        date_shift_offset=24,
+        date_shift_days=45,
+    )
+
+    assert deidentified_text == "Treatment dates were <DATE>."
+    assert final_spans[0].replacement == "<DATE>"
+    assert final_spans[0].metadata["project_date_shift_policy"] == (
+        "unparseable_date_placeholder"
+    )
+    assert warnings == ["Unparseable pyDeid date span replaced with <DATE>."]
+
+def test_deidentify_note_shifts_live_pydeid_four_digit_slash_date_range():
+    note = "Treatment dates were 8/31/2018-2/21/2018."
+
+    result = deidentify_note(
+        note,
+        patient_id="Patient/synth-date-range-001",
+        stable_date_shift=True,
+        date_shift_secret="date-secret",
+    )
+
+    assert "<DATE>" not in result.deidentified_text
+    assert "8/31/2018" not in result.deidentified_text
+    assert "2/21/2018" not in result.deidentified_text
+    date_range_spans = [
+        span
+        for span in result.spans
+        if span.metadata.get("project_date_shift_policy") == "shifted_date_range"
+    ]
+    assert len(date_range_spans) == 1
+    assert date_range_spans[0].metadata["project_date_shift_granularity"] == "date_range"
+
 def test_stable_date_shift_still_shifts_slash_month_year_without_fraction_context():
     note = "Follow-up occurred in 10/2021."
     start = note.index("10/2021")

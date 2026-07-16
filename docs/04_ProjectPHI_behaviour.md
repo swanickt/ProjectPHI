@@ -110,7 +110,9 @@ Current support includes ISO-style full dates, common English month-name full
 dates such as `March 14, 2026`, day-month-year forms such as
 `8 August 2019`, and month/year spans such as `March 2021`, but only inside
 pyDeid-detected date spans. Month/day shifting is available for partial dates
-such as `July 15`. The project does not scan the full note for dates.
+such as `July 15`. Slash date ranges that pyDeid emits as date-range spans are
+shifted endpoint-by-endpoint. The project does not scan the full note for
+dates.
 
 Month/year spans keep month/year granularity. The project uses the same
 patient-specific day offset as full dates with an internal day-15 anchor, then

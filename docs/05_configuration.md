@@ -202,8 +202,10 @@ does not return secrets, HMAC digests, hashes, or shifted dates.
 Stable date shifting uses pyDeid-detected date spans only. It shifts ISO-style
 full dates such as `2001-12-10`, common English month-name full dates such as
 `March 14, 2026` or `8 August 2019`, and month/year spans such as
-`March 2021` when pyDeid has already detected/pruned the span. These parsers
-operate only inside those spans; they do not scan the full note or add new date
+`March 2021` when pyDeid has already detected/pruned the span. It also shifts
+pyDeid-emitted slash date ranges such as `8/31/2018-2/21/2018` by applying the
+same patient-specific offset to both endpoints. These parsers operate only
+inside pyDeid date spans; they do not scan the full note or add new date
 detections.
 
 Month/year spans preserve month/year granularity. The implementation anchors
